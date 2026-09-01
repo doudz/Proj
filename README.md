@@ -92,7 +92,7 @@ docker compose up -d --build
 
 L'application est alors disponible sur `http://<votre-serveur>` (port 80 par defaut, modifiable via `HTTP_PORT` dans `.env`).
 
-Un compte administrateur Django est cree automatiquement au premier demarrage a partir de `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD` (accessible sur `/admin/`). Les utilisateurs finaux s'inscrivent eux-memes depuis l'ecran "Creer un compte" de l'application.
+Un compte administrateur Django est cree automatiquement a partir de `DJANGO_SUPERUSER_EMAIL` / `DJANGO_SUPERUSER_PASSWORD` (accessible sur `/admin/`), et re-synchronise a **chaque demarrage** du conteneur `backend` : si vous changez `DJANGO_SUPERUSER_PASSWORD` dans `.env`, le mot de passe du compte est mis a jour automatiquement au prochain `docker compose up`, sans etape manuelle. Les utilisateurs finaux s'inscrivent eux-memes depuis l'ecran "Creer un compte" de l'application.
 
 ### Mettre a jour
 
