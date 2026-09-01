@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
 from apps.projects.models import Label
+from apps.projects.permissions import can_edit_task_state, is_project_admin
 from apps.projects.serializers import LabelSerializer
 from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
 from apps.workspaces.models import ExternalContact
@@ -69,6 +70,8 @@ class TaskSerializer(serializers.ModelSerializer):
     project_icon = serializers.CharField(source="project.icon", read_only=True)
     workspace_id = serializers.IntegerField(source="project.workspace_id", read_only=True)
     workspace_name = serializers.CharField(source="project.workspace.name", read_only=True)
+    can_edit_full = serializers.SerializerMethodField()
+    can_edit_state = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -94,6 +97,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "end_variance_days",
             "is_blocked",
             "blocking_predecessor_titles",
+            "can_edit_full",
+            "can_edit_state",
             "is_milestone",
             "progress",
             "priority",
@@ -142,6 +147,18 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_blocking_predecessor_titles(self, obj):
         return [t.title for t in obj.blocking_predecessor_tasks()]
+
+    def get_can_edit_full(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return is_project_admin(request.user, obj.project)
+
+    def get_can_edit_state(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return can_edit_task_state(request.user, obj)
 
     def create(self, validated_data):
         validated_data["created_by"] = self.context["request"].user

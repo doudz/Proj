@@ -17,7 +17,7 @@
       <p v-if="typingLabel" class="text-caption text-medium-emphasis font-italic">{{ typingLabel }}</p>
     </div>
     <v-divider />
-    <div class="pa-2 d-flex align-center ga-2">
+    <div v-if="canComment" class="pa-2 d-flex align-center ga-2">
       <v-text-field
         v-model="draft"
         placeholder="Ecrire un message..."
@@ -30,6 +30,7 @@
       />
       <v-btn icon="mdi-send" color="primary" :disabled="!draft.trim()" @click="send" />
     </div>
+    <p v-else class="pa-2 text-caption text-medium-emphasis mb-0">Les observateurs ne peuvent pas commenter.</p>
   </div>
 </template>
 
@@ -39,7 +40,10 @@ import { connectSocket } from "@/services/ws";
 import { useAuthStore } from "@/stores/auth";
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 
-const props = defineProps({ taskId: { type: [String, Number], required: true } });
+const props = defineProps({
+  taskId: { type: [String, Number], required: true },
+  canComment: { type: Boolean, default: true },
+});
 
 const comments = ref([]);
 const draft = ref("");

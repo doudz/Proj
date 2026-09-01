@@ -5,6 +5,7 @@ export const useProjectStore = defineStore("project", {
   state: () => ({
     projects: [],
     current: null,
+    members: [],
   }),
   actions: {
     async fetchProjects(workspaceId) {
@@ -55,6 +56,22 @@ export const useProjectStore = defineStore("project", {
       const { data } = await api.post(`/projects/${projectId}/clear-baseline/`);
       if (this.current?.id === projectId) this.current = data;
       return data;
+    },
+    async fetchMembers(projectId) {
+      const { data } = await api.get(`/projects/${projectId}/members/`);
+      this.members = data;
+      return data;
+    },
+    async addMember(projectId, payload) {
+      const { data } = await api.post(`/projects/${projectId}/members/`, payload);
+      const idx = this.members.findIndex((m) => m.user.id === data.user.id);
+      if (idx !== -1) this.members[idx] = data;
+      else this.members.push(data);
+      return data;
+    },
+    async removeMember(projectId, userId) {
+      await api.delete(`/projects/${projectId}/members/${userId}/`);
+      this.members = this.members.filter((m) => m.user.id !== userId);
     },
   },
 });

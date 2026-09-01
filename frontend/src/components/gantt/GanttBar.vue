@@ -2,24 +2,27 @@
   <div
     v-if="task.is_milestone"
     class="gantt-milestone"
+    :class="{ 'not-draggable': !canDrag }"
     :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px' }"
     :title="task.title"
-    @pointerdown.stop="startDrag($event, 'move')"
-    @click.stop
+    @pointerdown.stop="canDrag && startDrag($event, 'move')"
+    @click.stop="!canDrag && $emit('click')"
   ></div>
   <div
     v-else
     class="gantt-bar"
-    :class="{ dragging }"
+    :class="{ dragging, 'not-draggable': !canDrag }"
     :style="{ left: liveX + 'px', top: y + barTop + 'px', width: liveWidth + 'px', height: barHeight + 'px', background: task.color || defaultColor }"
     :title="task.title"
-    @pointerdown.stop="startDrag($event, 'move')"
-    @click.stop
+    @pointerdown.stop="canDrag && startDrag($event, 'move')"
+    @click.stop="!canDrag && $emit('click')"
   >
     <div class="gantt-bar-progress" :style="{ width: task.progress + '%' }"></div>
     <span class="gantt-bar-label">{{ task.title }}</span>
-    <div class="gantt-handle left" @pointerdown.stop="startDrag($event, 'resize-start')"></div>
-    <div class="gantt-handle right" @pointerdown.stop="startDrag($event, 'resize-end')"></div>
+    <template v-if="canDrag">
+      <div class="gantt-handle left" @pointerdown.stop="startDrag($event, 'resize-start')"></div>
+      <div class="gantt-handle right" @pointerdown.stop="startDrag($event, 'resize-end')"></div>
+    </template>
   </div>
 </template>
 
@@ -34,6 +37,7 @@ const props = defineProps({
   dayWidth: { type: Number, required: true },
   barTop: { type: Number, default: 6 },
   barHeight: { type: Number, default: 28 },
+  canDrag: { type: Boolean, default: true },
 });
 const emit = defineEmits(["click", "reschedule"]);
 
@@ -107,6 +111,12 @@ function onUp() {
   cursor: grabbing;
   opacity: 0.85;
   z-index: 5;
+}
+.gantt-bar.not-draggable {
+  cursor: pointer;
+}
+.gantt-milestone.not-draggable {
+  cursor: pointer;
 }
 .gantt-bar-progress {
   position: absolute;

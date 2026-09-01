@@ -6,7 +6,7 @@
         <span class="text-subtitle-2 font-weight-bold">{{ column.name }}</span>
         <v-chip size="x-small" class="ml-2">{{ tasksByColumn[column.id]?.length || 0 }}</v-chip>
         <v-spacer />
-        <v-btn icon="mdi-plus" size="x-small" variant="text" @click="$emit('create-task', column.id)" />
+        <v-btn v-if="isAdmin" icon="mdi-plus" size="x-small" variant="text" @click="$emit('create-task', column.id)" />
       </div>
       <draggable
         :list="tasksByColumn[column.id] || []"
@@ -14,10 +14,12 @@
         item-key="id"
         class="kanban-drop-zone"
         ghost-class="ghost-card"
+        filter=".no-drag"
+        :prevent-on-filter="false"
         @change="(e) => onChange(e, column.id)"
       >
         <template #item="{ element }">
-          <TaskCard :task="element" @click="$emit('open-task', element.id)" />
+          <TaskCard :task="element" :class="{ 'no-drag': !element.can_edit_state }" @click="$emit('open-task', element.id)" />
         </template>
       </draggable>
     </div>
@@ -34,6 +36,8 @@ const props = defineProps({ project: { type: Object, required: true } });
 defineEmits(["open-task", "create-task"]);
 
 const taskStore = useTaskStore();
+
+const isAdmin = computed(() => props.project.my_role === "admin");
 
 const sortedColumns = computed(() => [...props.project.columns].sort((a, b) => a.order - b.order));
 

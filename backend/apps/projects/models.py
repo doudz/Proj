@@ -23,13 +23,45 @@ class Project(models.Model):
     baseline_captured_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="projects_created")
     created_at = models.DateTimeField(auto_now_add=True)
-    members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="projects", blank=True)
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="ProjectMembership", related_name="projects", blank=True)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return self.name
+
+
+class ProjectMembership(models.Model):
+    """A user's role on a specific project.
+
+    Workspace owners/admins implicitly get admin rights on every project in
+    their workspace (see apps.projects.permissions.get_project_role) without
+    needing a row here; this table is what governs everyone else:
+      - admin: full control (structure, tasks, members, dependencies...)
+      - member: can only change the state (progress/status/actual dates) of
+        tasks they are assigned to, and comment on tasks
+      - viewer: read-only, no exceptions
+
+    A workspace member with no row here defaults to viewer for that project.
+    """
+
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Administrateur"
+        MEMBER = "member", "Membre"
+        VIEWER = "viewer", "Observateur"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="memberships")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="project_memberships")
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.MEMBER)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("project", "user")
+        ordering = ["-role", "added_at"]
+
+    def __str__(self):
+        return f"{self.user} @ {self.project} ({self.role})"
 
 
 class BoardColumn(models.Model):

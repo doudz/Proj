@@ -24,6 +24,7 @@
           density="compact"
           hide-details
           class="text-h6"
+          :readonly="!canEditFull"
           @blur="patch({ title: task.title })"
         />
         <v-btn icon="mdi-close" variant="text" @click="close" />
@@ -36,6 +37,7 @@
             label="Description"
             variant="outlined"
             rows="3"
+            :readonly="!canEditFull"
             @blur="patch({ description: task.description })"
           />
           <v-row>
@@ -46,6 +48,7 @@
                 item-title="name"
                 item-value="id"
                 label="Statut"
+                :readonly="!canEditState"
                 @update:model-value="(v) => patch({ column: v })"
               />
             </v-col>
@@ -54,14 +57,27 @@
                 v-model="task.priority"
                 :items="priorities"
                 label="Priorite"
+                :readonly="!canEditFull"
                 @update:model-value="(v) => patch({ priority: v })"
               />
             </v-col>
             <v-col cols="6">
-              <v-text-field v-model="task.start_date" label="Debut" type="date" @change="patch({ start_date: task.start_date })" />
+              <v-text-field
+                v-model="task.start_date"
+                label="Debut"
+                type="date"
+                :readonly="!canEditFull"
+                @change="patch({ start_date: task.start_date })"
+              />
             </v-col>
             <v-col cols="6">
-              <v-text-field v-model="task.due_date" label="Echeance" type="date" @change="patch({ due_date: task.due_date })" />
+              <v-text-field
+                v-model="task.due_date"
+                label="Echeance"
+                type="date"
+                :readonly="!canEditFull"
+                @change="patch({ due_date: task.due_date })"
+              />
             </v-col>
             <v-col cols="12">
               <v-select
@@ -73,6 +89,7 @@
                 multiple
                 chips
                 return-object
+                :readonly="!canEditFull"
                 @update:model-value="onAssigneesChange"
               />
             </v-col>
@@ -88,13 +105,21 @@
                   chips
                   return-object
                   hide-details
+                  :readonly="!canEditFull"
                   @update:model-value="onExternalAssigneesChange"
                 >
                   <template #chip="{ item, props: chipProps }">
                     <v-chip v-bind="chipProps" prepend-icon="mdi-account-hard-hat-outline">{{ item.raw.name }}</v-chip>
                   </template>
                 </v-select>
-                <v-btn icon="mdi-plus" size="small" variant="tonal" title="Nouveau contact externe" @click="quickContactDialog = true" />
+                <v-btn
+                  v-if="canEditFull"
+                  icon="mdi-plus"
+                  size="small"
+                  variant="tonal"
+                  title="Nouveau contact externe"
+                  @click="quickContactDialog = true"
+                />
               </div>
               <p class="text-caption text-medium-emphasis mt-1">
                 Personnes/sous-traitants sans compte GanttFlow : notifies par e-mail uniquement (assignation, tache
@@ -111,6 +136,7 @@
                 multiple
                 chips
                 return-object
+                :readonly="!canEditFull"
                 @update:model-value="onLabelsChange"
               />
             </v-col>
@@ -120,10 +146,15 @@
                 <v-spacer />
                 <span class="text-caption">{{ task.progress }}%</span>
               </div>
-              <v-slider v-model="task.progress" :max="100" step="5" @end="patch({ progress: task.progress })" />
+              <v-slider v-model="task.progress" :max="100" step="5" :readonly="!canEditState" @end="patch({ progress: task.progress })" />
             </v-col>
             <v-col cols="12">
-              <v-checkbox v-model="task.is_milestone" label="Marquer comme jalon (milestone)" @change="patch({ is_milestone: task.is_milestone })" />
+              <v-checkbox
+                v-model="task.is_milestone"
+                label="Marquer comme jalon (milestone)"
+                :readonly="!canEditFull"
+                @change="patch({ is_milestone: task.is_milestone })"
+              />
             </v-col>
           </v-row>
 
@@ -131,17 +162,19 @@
           <div class="d-flex align-center mb-2">
             <span class="text-subtitle-2">Suivi reel</span>
             <v-spacer />
-            <v-tooltip :disabled="!task.is_blocked" location="top">
-              <template #activator="{ props: tooltipProps }">
-                <span v-bind="tooltipProps">
-                  <v-btn size="x-small" variant="tonal" class="mr-1" :disabled="task.is_blocked" @click="startNow">
-                    Demarrer aujourd'hui
-                  </v-btn>
-                </span>
-              </template>
-              <span>Bloquee par : {{ task.blocking_predecessor_titles.join(", ") }}</span>
-            </v-tooltip>
-            <v-btn size="x-small" variant="tonal" color="success" @click="completeNow">Terminer aujourd'hui</v-btn>
+            <template v-if="canEditState">
+              <v-tooltip :disabled="!task.is_blocked" location="top">
+                <template #activator="{ props: tooltipProps }">
+                  <span v-bind="tooltipProps">
+                    <v-btn size="x-small" variant="tonal" class="mr-1" :disabled="task.is_blocked" @click="startNow">
+                      Demarrer aujourd'hui
+                    </v-btn>
+                  </span>
+                </template>
+                <span>Bloquee par : {{ task.blocking_predecessor_titles.join(", ") }}</span>
+              </v-tooltip>
+              <v-btn size="x-small" variant="tonal" color="success" @click="completeNow">Terminer aujourd'hui</v-btn>
+            </template>
           </div>
           <p class="text-caption text-medium-emphasis mb-2">
             Les dates reelles sont libres : une tache peut demarrer ou se terminer avant ou apres les dates planifiees ci-dessus.
@@ -159,6 +192,7 @@
                 v-model="task.actual_start_date"
                 label="Debut reel"
                 type="date"
+                :readonly="!canEditState"
                 @change="patch({ actual_start_date: task.actual_start_date || null })"
               />
             </v-col>
@@ -167,6 +201,7 @@
                 v-model="task.actual_end_date"
                 label="Fin reelle"
                 type="date"
+                :readonly="!canEditState"
                 @change="patch({ actual_end_date: task.actual_end_date || null })"
               />
             </v-col>
@@ -191,6 +226,7 @@
             </v-list-item>
           </v-list>
           <v-text-field
+            v-if="canEditFull"
             v-model="newSubtask"
             placeholder="Ajouter une sous-tache et appuyer sur Entree"
             density="compact"
@@ -202,7 +238,7 @@
 
           <v-divider class="my-2" />
           <div class="text-subtitle-2 mb-1">Dependances (a demarrer apres)</div>
-          <p class="text-caption text-medium-emphasis mb-2">
+          <p v-if="canEditFull" class="text-caption text-medium-emphasis mb-2">
             Cliquez sur le cadenas d'une dependance pour la rendre bloquante : la tache ne pourra alors pas etre
             demarree tant que la precedente n'est pas terminee, et ses assignes seront notifies (in-app + e-mail)
             des qu'elle redevient disponible.
@@ -210,7 +246,7 @@
           <v-chip
             v-for="dep in predecessorDeps"
             :key="dep.id"
-            closable
+            :closable="canEditFull"
             size="small"
             class="mr-1 mb-1"
             :color="dep.enforce_blocking ? 'warning' : undefined"
@@ -220,44 +256,46 @@
               :icon="dep.enforce_blocking ? 'mdi-lock' : 'mdi-lock-open-variant-outline'"
               size="16"
               class="mr-1"
-              @click.stop="toggleBlocking(dep)"
+              @click.stop="canEditFull && toggleBlocking(dep)"
             />
             {{ taskTitle(dep.predecessor) }}
           </v-chip>
-          <v-row class="align-center" no-gutters>
-            <v-col cols="8">
-              <v-autocomplete
-                v-model="pendingDependency"
-                :items="dependencyCandidates"
-                item-title="title"
-                item-value="id"
-                label="Ajouter une dependance"
-                density="compact"
-                hide-details
-                variant="outlined"
-              />
-            </v-col>
-            <v-col cols="4" class="d-flex align-center pl-2">
-              <v-checkbox v-model="pendingBlocking" label="Bloquante" density="compact" hide-details />
-            </v-col>
-          </v-row>
-          <v-btn
-            size="small"
-            variant="tonal"
-            class="mt-2"
-            :disabled="!pendingDependency"
-            @click="addDependency"
-          >
-            Ajouter
-          </v-btn>
+          <template v-if="canEditFull">
+            <v-row class="align-center" no-gutters>
+              <v-col cols="8">
+                <v-autocomplete
+                  v-model="pendingDependency"
+                  :items="dependencyCandidates"
+                  item-title="title"
+                  item-value="id"
+                  label="Ajouter une dependance"
+                  density="compact"
+                  hide-details
+                  variant="outlined"
+                />
+              </v-col>
+              <v-col cols="4" class="d-flex align-center pl-2">
+                <v-checkbox v-model="pendingBlocking" label="Bloquante" density="compact" hide-details />
+              </v-col>
+            </v-row>
+            <v-btn
+              size="small"
+              variant="tonal"
+              class="mt-2"
+              :disabled="!pendingDependency"
+              @click="addDependency"
+            >
+              Ajouter
+            </v-btn>
+          </template>
         </v-col>
         <v-col cols="5" class="border-s" style="max-height: 70vh">
-          <TaskComments :task-id="task.id" />
+          <TaskComments :task-id="task.id" :can-comment="canComment" />
         </v-col>
       </v-row>
       <v-divider />
       <v-card-actions>
-        <v-btn color="error" variant="text" prepend-icon="mdi-delete-outline" @click="remove">Supprimer</v-btn>
+        <v-btn v-if="canEditFull" color="error" variant="text" prepend-icon="mdi-delete-outline" @click="remove">Supprimer</v-btn>
         <v-spacer />
         <span class="text-caption text-medium-emphasis">Modifie le {{ formatDate(task.updated_at) }}</span>
       </v-card-actions>
@@ -302,6 +340,9 @@ const taskStore = useTaskStore();
 const workspaceStore = useWorkspaceStore();
 const isCreate = computed(() => props.modelValue && !props.taskId);
 const task = computed(() => (props.taskId ? taskStore.byId(Number(props.taskId)) : null));
+const canEditFull = computed(() => task.value?.can_edit_full ?? false);
+const canEditState = computed(() => task.value?.can_edit_state ?? false);
+const canComment = computed(() => props.project.my_role === "admin" || props.project.my_role === "member");
 const newSubtask = ref("");
 const pendingDependency = ref(null);
 const pendingBlocking = ref(false);

@@ -21,6 +21,7 @@
         capturee le {{ formatCapturedAt(project.baseline_captured_at) }}
       </span>
       <v-btn
+        v-if="isAdmin"
         size="small"
         variant="text"
         class="ml-2"
@@ -30,7 +31,7 @@
         {{ project.baseline_captured_at ? "Mettre a jour" : "Definir la ligne de base" }}
       </v-btn>
       <v-btn
-        v-if="project.baseline_captured_at"
+        v-if="isAdmin && project.baseline_captured_at"
         size="small"
         variant="text"
         color="error"
@@ -147,6 +148,7 @@
                 :bar-top="BAR_TOP"
                 :bar-height="BAR_HEIGHT"
                 :day-width="dayWidth"
+                :can-drag="isAdmin"
                 @click="$emit('open-task', row.task.id)"
                 @reschedule="(delta) => onReschedule(row.task, delta)"
               />
@@ -190,6 +192,7 @@ const collapsed = reactive(new Set());
 const bodyRef = ref(null);
 const showBaseline = ref(!!props.project.baseline_captured_at);
 const confirmBaseline = ref(false);
+const isAdmin = computed(() => props.project.my_role === "admin");
 
 watch(
   () => props.project.baseline_captured_at,

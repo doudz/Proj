@@ -21,7 +21,8 @@
             <span class="text-caption text-white">{{ m.initials }}</span>
           </v-avatar>
         </div>
-        <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreateTask()">Nouvelle tache</v-btn>
+        <v-btn prepend-icon="mdi-account-multiple-outline" variant="tonal" class="mr-2" @click="membersDialog = true">Membres</v-btn>
+        <v-btn v-if="isAdmin" color="primary" prepend-icon="mdi-plus" @click="openCreateTask()">Nouvelle tache</v-btn>
       </div>
       <v-tabs v-model="tab" class="mt-4">
         <v-tab value="board" prepend-icon="mdi-view-column-outline">Tableau</v-tab>
@@ -54,6 +55,56 @@
       @created="onTaskCreated"
       @open-task="openTask"
     />
+
+    <v-dialog v-model="membersDialog" max-width="520">
+      <v-card title="Membres du projet">
+        <v-card-subtitle class="px-4">
+          Administrateur : cree/modifie le projet et ses taches. Membre : assigne a des taches, peut en changer le
+          statut/avancement. Observateur : consultation seule.
+        </v-card-subtitle>
+        <v-card-text>
+          <v-list>
+            <v-list-item v-for="m in projectStore.members" :key="m.id" :title="m.user.first_name + ' ' + m.user.last_name">
+              <template #prepend>
+                <v-avatar :color="m.user.avatar_color">{{ m.user.initials }}</v-avatar>
+              </template>
+              <template #append>
+                <template v-if="isAdmin">
+                  <v-select
+                    :model-value="m.role"
+                    :items="roleOptions"
+                    density="compact"
+                    hide-details
+                    variant="outlined"
+                    style="max-width: 160px"
+                    @update:model-value="(v) => changeRole(m, v)"
+                  />
+                  <v-btn icon="mdi-close" variant="text" size="small" class="ml-1" @click="removeMember(m)" />
+                </template>
+                <v-chip v-else size="small">{{ roleLabel(m.role) }}</v-chip>
+              </template>
+            </v-list-item>
+          </v-list>
+          <template v-if="isAdmin">
+            <v-divider class="my-3" />
+            <div class="text-subtitle-2 mb-2">Ajouter un membre</div>
+            <v-select
+              v-model="newMemberUserId"
+              :items="addableWorkspaceMembers"
+              item-title="label"
+              item-value="id"
+              label="Personne"
+              density="compact"
+            />
+            <v-select v-model="newMemberRole" :items="roleOptions" label="Role" density="compact" />
+            <v-btn color="primary" :disabled="!newMemberUserId" @click="addMember">Ajouter</v-btn>
+          </template>
+          <p v-else class="text-caption text-medium-emphasis mt-2">
+            Seuls les administrateurs du projet peuvent gerer les membres.
+          </p>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -67,7 +118,8 @@ import { connectSocket } from "@/services/ws";
 import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useTaskStore } from "@/stores/task";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useWorkspaceStore } from "@/stores/workspace";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const props = defineProps({ id: { type: [String, Number], required: true } });
@@ -75,6 +127,7 @@ const props = defineProps({ id: { type: [String, Number], required: true } });
 const projectStore = useProjectStore();
 const taskStore = useTaskStore();
 const notificationStore = useNotificationStore();
+const workspaceStore = useWorkspaceStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -82,7 +135,57 @@ const tab = ref("board");
 const taskDialog = ref(false);
 const selectedTaskId = ref(null);
 const defaultColumn = ref(null);
+const membersDialog = ref(false);
+const newMemberUserId = ref(null);
+const newMemberRole = ref("member");
 let socket = null;
+
+const isAdmin = computed(() => projectStore.current?.my_role === "admin");
+
+const roleOptions = [
+  { title: "Administrateur", value: "admin" },
+  { title: "Membre", value: "member" },
+  { title: "Observateur", value: "viewer" },
+];
+
+function roleLabel(value) {
+  return roleOptions.find((r) => r.value === value)?.title || value;
+}
+
+const addableWorkspaceMembers = computed(() => {
+  const existingUserIds = new Set(projectStore.members.map((m) => m.user.id));
+  return workspaceStore.members
+    .filter((m) => !existingUserIds.has(m.user.id))
+    .map((m) => ({ id: m.user.id, label: `${m.user.first_name} ${m.user.last_name}` }));
+});
+
+watch(membersDialog, async (open) => {
+  if (open && projectStore.current) {
+    newMemberUserId.value = null;
+    newMemberRole.value = "member";
+    await Promise.all([
+      projectStore.fetchMembers(projectStore.current.id),
+      workspaceStore.fetchMembers(projectStore.current.workspace),
+    ]);
+  }
+});
+
+async function changeRole(membership, role) {
+  await projectStore.addMember(projectStore.current.id, { user_id: membership.user.id, role });
+}
+
+async function removeMember(membership) {
+  if (confirm(`Retirer ${membership.user.first_name} ${membership.user.last_name} du projet ?`)) {
+    await projectStore.removeMember(projectStore.current.id, membership.user.id);
+  }
+}
+
+async function addMember() {
+  if (!newMemberUserId.value) return;
+  await projectStore.addMember(projectStore.current.id, { user_id: newMemberUserId.value, role: newMemberRole.value });
+  newMemberUserId.value = null;
+  newMemberRole.value = "member";
+}
 
 async function load(id) {
   await projectStore.fetchProject(id);
