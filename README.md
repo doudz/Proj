@@ -12,6 +12,7 @@
 - **Espaces de travail** (workspaces) avec roles (proprietaire, admin, membre, invite) et invitations
 - **Projets** avec colonnes Kanban personnalisables, etiquettes (labels), membres
 - **Taches** : dates de debut/echeance, avancement (%), priorite, sous-taches, pieces jointes, assignation multi-utilisateurs
+- **Contacts externes** : assignez des taches a des personnes/sous-traitants sans compte GanttFlow (travail externalise) - notifies par e-mail uniquement (voir ci-dessous)
 - **Dependances entre taches** (Fin->Debut, Debut->Debut, Fin->Fin, Debut->Fin), avec une option **bloquante** par dependance : la tache suivante ne peut pas etre demarree tant que la precedente n'est pas a 100% (voir ci-dessous)
 - **Ligne de base** (baseline) : figez le planning de reference et comparez-le au reel (dates de debut/fin reelles, libres par rapport aux dates planifiees, ecart en jours)
 - **Vue Gantt** (par projet) : zoom jour / semaine / mois, glisser-deposer pour replanifier, redimensionnement des barres, fleches de dependances, jalons, ligne "aujourd'hui", comparaison visuelle ligne de base / reel
@@ -41,6 +42,15 @@ Accessible depuis le menu lateral (« Vue multi-projets »), cette vue affiche s
 Cette vue est en lecture/replanification simple (glisser-deposer pour changer les dates) mais n'affiche pas les dependances, la ligne de base ni le detail complet d'une tache : ces informations restent consultables projet par projet, en cliquant sur la tache.
 
 Cette option est desactivee par defaut sur chaque dependance : les dependances "informatives" (sans blocage) restent possibles pour simplement visualiser un enchainement sur le Gantt sans contraindre le demarrage.
+
+### Contacts externes (assigner une tache a un sous-traitant)
+
+Par defaut, une tache ne peut etre assignee qu'a un membre de l'espace de travail (compte GanttFlow). Pour externaliser une tache (freelance, sous-traitant, client, etc. sans acces a l'outil), chaque espace de travail dispose d'un carnet de **contacts externes** :
+
+- Gestion centralisee depuis le bouton « Contacts externes » de la page d'accueil de l'espace de travail (nom, e-mail, societe, telephone, notes).
+- Depuis la fiche d'une tache, un champ **« Assignes externes »** (distinct du champ « Assignes » reserve aux membres) permet de choisir un ou plusieurs contacts existants, ou d'en creer un a la volee sans quitter la tache.
+- Les contacts externes apparaissent partout ou les assignes sont affiches (carte Kanban, liste, vue multi-projets) avec un avatar a bordure en pointilles pour les distinguer des membres, et sont pris en compte dans la detection de conflits de charge de la vue multi-projets (un sous-traitant surbooke sur deux projets est detecte comme un membre interne).
+- N'ayant pas de compte, un contact externe **ne recoit jamais de notification in-app** : il est prevenu **uniquement par e-mail**, a l'assignation d'une tache et lorsqu'une tache dont il depend (dependance bloquante) devient disponible - mêmes evenements que pour un membre interne, avec le meme reglage `EMAIL_*` (voir plus bas).
 
 ## Architecture
 
@@ -190,7 +200,7 @@ Voir `.env.example` pour la liste complete. Points d'attention en production :
 ## Limites connues / pistes d'evolution
 
 - Pas encore de taches recurrentes, de vue "charge de travail" (workload) ni d'automatisations no-code (regles) comme Monday.com.
-- Seule la notification "tache disponible" (dependance bloquante terminee) declenche un e-mail pour l'instant. Les invitations et rappels d'echeance restent a completer, de meme qu'une file d'attente (Celery) pour ne pas envoyer les e-mails de maniere synchrone sous forte charge.
+- Les e-mails sont envoyes pour : l'assignation d'un contact externe, et la notification "tache disponible" (dependance bloquante terminee) pour les membres comme pour les contacts externes. Les membres internes ne recoivent en revanche pas d'e-mail a l'assignation (notification in-app + temps reel uniquement). Les invitations et rappels d'echeance par e-mail restent a completer, de meme qu'une file d'attente (Celery) pour ne pas envoyer les e-mails de maniere synchrone sous forte charge.
 - La creation de dependances se fait depuis le panneau de detail de la tache (pas encore par glisser-deposer directement sur le Gantt).
 
 ## Licence

@@ -77,6 +77,31 @@
               />
             </v-col>
             <v-col cols="12">
+              <div class="d-flex align-center ga-2">
+                <v-select
+                  v-model="task.external_assignees"
+                  :items="workspaceStore.externalContacts"
+                  item-title="name"
+                  item-value="id"
+                  label="Assignes externes (sous-traitants)"
+                  multiple
+                  chips
+                  return-object
+                  hide-details
+                  @update:model-value="onExternalAssigneesChange"
+                >
+                  <template #chip="{ item, props: chipProps }">
+                    <v-chip v-bind="chipProps" prepend-icon="mdi-account-hard-hat-outline">{{ item.raw.name }}</v-chip>
+                  </template>
+                </v-select>
+                <v-btn icon="mdi-plus" size="small" variant="tonal" title="Nouveau contact externe" @click="quickContactDialog = true" />
+              </div>
+              <p class="text-caption text-medium-emphasis mt-1">
+                Personnes/sous-traitants sans compte GanttFlow : notifies par e-mail uniquement (assignation, tache
+                disponible).
+              </p>
+            </v-col>
+            <v-col cols="12">
               <v-select
                 v-model="task.labels"
                 :items="project.labels"
@@ -238,11 +263,31 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <v-dialog v-model="quickContactDialog" max-width="420">
+    <v-card title="Nouveau contact externe">
+      <v-card-text>
+        <p class="text-caption text-medium-emphasis mb-3">
+          Pour une personne ou un sous-traitant sans compte GanttFlow (travail externalise). Il/elle sera notifie(e)
+          par e-mail lors de l'assignation.
+        </p>
+        <v-text-field v-model="quickContact.name" label="Nom" autofocus />
+        <v-text-field v-model="quickContact.email" label="E-mail (pour les notifications)" />
+        <v-text-field v-model="quickContact.company" label="Societe (optionnel)" />
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="quickContactDialog = false">Annuler</v-btn>
+        <v-btn color="primary" :disabled="!quickContact.name.trim()" @click="createQuickContact">Ajouter et assigner</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
 import TaskComments from "@/components/task/TaskComments.vue";
 import { useTaskStore } from "@/stores/task";
+import { useWorkspaceStore } from "@/stores/workspace";
 import { computed, reactive, ref, watch } from "vue";
 
 const props = defineProps({
@@ -254,12 +299,15 @@ const props = defineProps({
 const emit = defineEmits(["update:modelValue", "open-task", "created"]);
 
 const taskStore = useTaskStore();
+const workspaceStore = useWorkspaceStore();
 const isCreate = computed(() => props.modelValue && !props.taskId);
 const task = computed(() => (props.taskId ? taskStore.byId(Number(props.taskId)) : null));
 const newSubtask = ref("");
 const pendingDependency = ref(null);
 const pendingBlocking = ref(false);
 const startError = ref("");
+const quickContactDialog = ref(false);
+const quickContact = reactive({ name: "", email: "", company: "" });
 
 const priorities = [
   { title: "Basse", value: "low" },
@@ -280,6 +328,7 @@ watch(
       pendingDependency.value = null;
       pendingBlocking.value = false;
       startError.value = "";
+      quickContactDialog.value = false;
     }
   }
 );
@@ -345,6 +394,26 @@ const varianceLabel = computed(() => {
 function onAssigneesChange(values) {
   const ids = values.map((v) => (typeof v === "object" ? v.id : v));
   patch({ assignee_ids: ids });
+}
+
+function onExternalAssigneesChange(values) {
+  const ids = values.map((v) => (typeof v === "object" ? v.id : v));
+  patch({ external_assignee_ids: ids });
+}
+
+async function createQuickContact() {
+  if (!quickContact.name.trim() || !task.value) return;
+  const contact = await workspaceStore.createExternalContact({
+    name: quickContact.name,
+    email: quickContact.email,
+    company: quickContact.company,
+    workspace: props.project.workspace,
+  });
+  quickContact.name = "";
+  quickContact.email = "";
+  quickContact.company = "";
+  quickContactDialog.value = false;
+  await patch({ external_assignee_ids: [...task.value.external_assignees.map((c) => c.id), contact.id] });
 }
 
 function onLabelsChange(values) {

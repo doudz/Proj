@@ -20,8 +20,18 @@
     </template>
     <template #item.assignees="{ item }">
       <div class="d-flex ml-n1">
-        <v-avatar v-for="a in item.assignees" :key="a.id" :color="a.avatar_color" size="24" class="ml-n1">
+        <v-avatar v-for="a in item.assignees" :key="a.id" :color="a.avatar_color" size="24" class="ml-n1" :title="a.first_name + ' ' + a.last_name">
           <span class="text-caption text-white">{{ a.initials }}</span>
+        </v-avatar>
+        <v-avatar
+          v-for="c in item.external_assignees"
+          :key="'ext-' + c.id"
+          :color="c.color"
+          size="24"
+          class="ml-n1 external-avatar"
+          :title="c.name + ' (externe)'"
+        >
+          <span class="text-caption text-white">{{ c.initials }}</span>
         </v-avatar>
       </div>
     </template>
@@ -78,3 +88,9 @@ function columnColor(id) {
   return props.project.columns.find((c) => c.id === id)?.color || "grey";
 }
 </script>
+
+<style scoped>
+.external-avatar {
+  border: 2px dashed white;
+}
+</style>

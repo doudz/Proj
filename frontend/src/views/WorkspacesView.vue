@@ -13,6 +13,9 @@
         </div>
         <v-spacer />
         <v-btn prepend-icon="mdi-account-multiple-plus-outline" variant="tonal" class="mr-2" @click="membersDialog = true">Membres</v-btn>
+        <v-btn prepend-icon="mdi-account-hard-hat-outline" variant="tonal" class="mr-2" @click="contactsDialog = true">
+          Contacts externes
+        </v-btn>
         <v-btn color="primary" prepend-icon="mdi-plus" @click="$router.push('/projects')">Voir les projets</v-btn>
       </div>
 
@@ -61,6 +64,36 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="contactsDialog" max-width="560">
+      <v-card title="Contacts externes">
+        <v-card-subtitle class="px-4">
+          Personnes ou sous-traitants sans compte GanttFlow, assignables a des taches (travail externalise). Notifies
+          par e-mail uniquement.
+        </v-card-subtitle>
+        <v-card-text>
+          <v-list v-if="workspaceStore.externalContacts.length">
+            <v-list-item v-for="c in workspaceStore.externalContacts" :key="c.id">
+              <template #prepend>
+                <v-avatar :color="c.color">{{ c.initials }}</v-avatar>
+              </template>
+              <v-list-item-title>{{ c.name }}<span v-if="c.company" class="text-medium-emphasis"> - {{ c.company }}</span></v-list-item-title>
+              <v-list-item-subtitle>{{ c.email || "Sans e-mail" }}</v-list-item-subtitle>
+              <template #append>
+                <v-btn icon="mdi-delete-outline" variant="text" size="small" @click="removeContact(c.id)" />
+              </template>
+            </v-list-item>
+          </v-list>
+          <p v-else class="text-medium-emphasis">Aucun contact externe pour le moment.</p>
+          <v-divider class="my-3" />
+          <div class="text-subtitle-2 mb-2">Ajouter un contact</div>
+          <v-text-field v-model="newContact.name" label="Nom" density="compact" />
+          <v-text-field v-model="newContact.email" label="E-mail (pour les notifications)" density="compact" />
+          <v-text-field v-model="newContact.company" label="Societe (optionnel)" density="compact" />
+          <v-btn color="primary" :disabled="!newContact.name.trim()" @click="createContact">Ajouter</v-btn>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="newProjectDialog" max-width="420">
       <v-card title="Nouveau projet">
         <v-card-text>
@@ -79,7 +112,7 @@
 <script setup>
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { onMounted, ref, watch } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const workspaceStore = useWorkspaceStore();
@@ -88,6 +121,8 @@ const router = useRouter();
 
 const membersDialog = ref(false);
 const inviteEmail = ref("");
+const contactsDialog = ref(false);
+const newContact = reactive({ name: "", email: "", company: "" });
 const newProjectDialog = ref(false);
 const newProjectName = ref("");
 
@@ -100,6 +135,24 @@ onMounted(async () => {
 watch(membersDialog, async (open) => {
   if (open && workspaceStore.current) await workspaceStore.fetchMembers(workspaceStore.current.id);
 });
+
+watch(contactsDialog, async (open) => {
+  if (open && workspaceStore.current) await workspaceStore.fetchExternalContacts(workspaceStore.current.id);
+});
+
+async function createContact() {
+  if (!newContact.name.trim() || !workspaceStore.current) return;
+  await workspaceStore.createExternalContact({ ...newContact, workspace: workspaceStore.current.id });
+  newContact.name = "";
+  newContact.email = "";
+  newContact.company = "";
+}
+
+async function removeContact(id) {
+  if (confirm("Supprimer ce contact externe ? Il sera retire des taches qui lui sont assignees.")) {
+    await workspaceStore.deleteExternalContact(id);
+  }
+}
 
 async function invite() {
   if (!inviteEmail.value.trim()) return;

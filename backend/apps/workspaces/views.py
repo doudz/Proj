@@ -4,9 +4,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.accounts.serializers import UserSerializer
-from apps.workspaces.models import Invitation, Membership, Workspace
+from apps.workspaces.models import ExternalContact, Invitation, Membership, Workspace
 from apps.workspaces.permissions import user_workspace_ids
-from apps.workspaces.serializers import InvitationSerializer, MembershipSerializer, WorkspaceSerializer
+from apps.workspaces.serializers import (
+    ExternalContactSerializer,
+    InvitationSerializer,
+    MembershipSerializer,
+    WorkspaceSerializer,
+)
 
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
@@ -51,3 +56,16 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Permission refusee."}, status=status.HTTP_403_FORBIDDEN)
         workspace.memberships.filter(user_id=user_id).exclude(role=Membership.Role.OWNER).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ExternalContactViewSet(viewsets.ModelViewSet):
+    """Non-user people/subcontractors that tasks can be assigned to (outsourced work).
+    They are notified by e-mail only, since they never log into the app."""
+
+    serializer_class = ExternalContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["workspace"]
+    search_fields = ["name", "email", "company"]
+
+    def get_queryset(self):
+        return ExternalContact.objects.filter(workspace_id__in=user_workspace_ids(self.request.user))

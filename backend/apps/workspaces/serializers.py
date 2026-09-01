@@ -2,7 +2,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
-from apps.workspaces.models import Invitation, Membership, Workspace
+from apps.workspaces.models import ExternalContact, Invitation, Membership, Workspace
 
 
 class MembershipSerializer(serializers.ModelSerializer):
@@ -49,3 +49,16 @@ class InvitationSerializer(serializers.ModelSerializer):
         model = Invitation
         fields = ["id", "email", "role", "token", "created_at", "accepted"]
         read_only_fields = ["id", "token", "created_at", "accepted"]
+
+
+class ExternalContactSerializer(serializers.ModelSerializer):
+    initials = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ExternalContact
+        fields = ["id", "workspace", "name", "email", "company", "phone", "notes", "color", "initials", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def create(self, validated_data):
+        validated_data["created_by"] = self.context["request"].user
+        return super().create(validated_data)

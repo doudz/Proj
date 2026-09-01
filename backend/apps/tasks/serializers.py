@@ -5,6 +5,8 @@ from apps.accounts.serializers import UserSerializer
 from apps.projects.models import Label
 from apps.projects.serializers import LabelSerializer
 from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
+from apps.workspaces.models import ExternalContact
+from apps.workspaces.serializers import ExternalContactSerializer
 
 User = get_user_model()
 
@@ -47,6 +49,10 @@ class TaskSerializer(serializers.ModelSerializer):
     assignee_ids = serializers.PrimaryKeyRelatedField(
         source="assignees", queryset=User.objects.all(), many=True, write_only=True, required=False
     )
+    external_assignees = ExternalContactSerializer(many=True, read_only=True)
+    external_assignee_ids = serializers.PrimaryKeyRelatedField(
+        source="external_assignees", queryset=ExternalContact.objects.all(), many=True, write_only=True, required=False
+    )
     labels = LabelSerializer(many=True, read_only=True)
     label_ids = serializers.PrimaryKeyRelatedField(
         source="labels", queryset=Label.objects.all(), many=True, write_only=True, required=False
@@ -85,6 +91,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "order",
             "assignees",
             "assignee_ids",
+            "external_assignees",
+            "external_assignee_ids",
             "labels",
             "label_ids",
             "predecessors",

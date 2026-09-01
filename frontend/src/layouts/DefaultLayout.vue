@@ -142,13 +142,19 @@ onMounted(async () => {
   if (!authStore.user) await authStore.fetchMe();
   await workspaceStore.fetchWorkspaces();
   await notificationStore.fetchAll();
-  if (workspaceStore.current) await projectStore.fetchProjects(workspaceStore.current.id);
+  if (workspaceStore.current) {
+    await projectStore.fetchProjects(workspaceStore.current.id);
+    await workspaceStore.fetchExternalContacts(workspaceStore.current.id);
+  }
 });
 
 watch(
   () => workspaceStore.current,
   async (ws) => {
-    if (ws) await projectStore.fetchProjects(ws.id);
+    if (ws) {
+      await projectStore.fetchProjects(ws.id);
+      await workspaceStore.fetchExternalContacts(ws.id);
+    }
   }
 );
 

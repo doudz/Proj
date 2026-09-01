@@ -39,6 +39,11 @@ class Task(models.Model):
     order = models.PositiveIntegerField(default=0)
 
     assignees = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="assigned_tasks", blank=True)
+    # External people/subcontractors without a GanttFlow account (outsourced work).
+    # Notified by e-mail only - see apps.tasks.signals.
+    external_assignees = models.ManyToManyField(
+        "workspaces.ExternalContact", related_name="assigned_tasks", blank=True
+    )
     labels = models.ManyToManyField(Label, related_name="tasks", blank=True)
 
     created_by = models.ForeignKey(

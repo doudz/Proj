@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.workspaces.models import Invitation, Membership, Workspace
+from apps.workspaces.models import ExternalContact, Invitation, Membership, Workspace
 
 
 @admin.register(Workspace)
@@ -18,3 +18,10 @@ class MembershipAdmin(admin.ModelAdmin):
 @admin.register(Invitation)
 class InvitationAdmin(admin.ModelAdmin):
     list_display = ["workspace", "email", "role", "accepted", "created_at"]
+
+
+@admin.register(ExternalContact)
+class ExternalContactAdmin(admin.ModelAdmin):
+    list_display = ["name", "company", "email", "workspace", "created_at"]
+    search_fields = ["name", "company", "email"]
+    list_filter = ["workspace"]

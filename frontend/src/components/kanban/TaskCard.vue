@@ -22,6 +22,14 @@
           <v-avatar v-for="a in task.assignees.slice(0, 3)" :key="a.id" :color="a.avatar_color" size="22" class="ml-n1 avatar-border">
             <span class="text-caption text-white">{{ a.initials }}</span>
           </v-avatar>
+          <v-tooltip v-for="c in task.external_assignees.slice(0, 2)" :key="'ext-' + c.id" location="top">
+            <template #activator="{ props: tooltipProps }">
+              <v-avatar v-bind="tooltipProps" :color="c.color" size="22" class="ml-n1 avatar-border external-avatar">
+                <span class="text-caption text-white">{{ c.initials }}</span>
+              </v-avatar>
+            </template>
+            <span>{{ c.name }} (externe)</span>
+          </v-tooltip>
         </div>
       </div>
       <v-progress-linear v-if="task.progress > 0" :model-value="task.progress" height="4" rounded class="mt-2" color="success" />
@@ -60,5 +68,8 @@ const dueLabel = computed(() => {
 }
 .avatar-border {
   border: 2px solid white;
+}
+.external-avatar {
+  border-style: dashed;
 }
 </style>

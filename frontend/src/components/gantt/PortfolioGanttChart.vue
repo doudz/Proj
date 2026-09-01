@@ -19,7 +19,7 @@
           v-model="selectedAssigneeIds"
           :items="availableAssignees"
           item-title="fullName"
-          item-value="id"
+          item-value="key"
           label="Assignes"
           multiple
           chips
@@ -78,7 +78,7 @@
           :style="{ height: rowHeight + 'px', paddingLeft: row.isGroupHeader ? '8px' : '28px' }"
         >
           <template v-if="row.isGroupHeader">
-            <v-avatar v-if="row.avatarColor" :color="row.avatarColor" size="22" class="mr-2">
+            <v-avatar v-if="row.avatarColor" :color="row.avatarColor" size="22" class="mr-2" :class="{ 'external-avatar': row.externalHeader }">
               <span class="text-caption text-white">{{ row.avatarInitials }}</span>
             </v-avatar>
             <span class="dot mr-2" v-else-if="row.color" :style="{ backgroundColor: row.color }"></span>
@@ -205,11 +205,22 @@ const tasksWithProjectInfo = computed(() =>
   })
 );
 
+/** Internal users and external contacts share the same numeric id space per model,
+ * so every "assignee" is identified here by a composite `u-<id>` / `e-<id>` key. */
+function assigneeKeys(task) {
+  return [...task.assignees.map((a) => `u-${a.id}`), ...task.external_assignees.map((c) => `e-${c.id}`)];
+}
+
 const availableAssignees = computed(() => {
   const map = new Map();
   for (const t of tasksWithProjectInfo.value) {
     for (const a of t.assignees) {
-      if (!map.has(a.id)) map.set(a.id, { ...a, fullName: `${a.first_name} ${a.last_name}`.trim() || a.email });
+      const key = `u-${a.id}`;
+      if (!map.has(key)) map.set(key, { key, fullName: `${a.first_name} ${a.last_name}`.trim() || a.email, external: false });
+    }
+    for (const c of t.external_assignees) {
+      const key = `e-${c.id}`;
+      if (!map.has(key)) map.set(key, { key, fullName: `${c.name} (externe)`, external: true });
     }
   }
   return [...map.values()].sort((a, b) => a.fullName.localeCompare(b.fullName));
@@ -231,7 +242,7 @@ const filteredTasks = computed(() => {
   const labelSet = new Set(selectedLabelNames.value);
   return tasksWithProjectInfo.value.filter((t) => {
     if (projectSet.size && !projectSet.has(t.project)) return false;
-    if (assigneeSet.size && !t.assignees.some((a) => assigneeSet.has(a.id))) return false;
+    if (assigneeSet.size && !assigneeKeys(t).some((k) => assigneeSet.has(k))) return false;
     if (labelSet.size && !t.labels.some((l) => labelSet.has(l.name))) return false;
     return true;
   });
@@ -246,9 +257,9 @@ const conflicts = computed(() => {
   const byAssignee = new Map();
   for (const t of filteredTasks.value) {
     if (!t.start_date || !t.due_date) continue;
-    for (const a of t.assignees) {
-      if (!byAssignee.has(a.id)) byAssignee.set(a.id, []);
-      byAssignee.get(a.id).push(t);
+    for (const key of assigneeKeys(t)) {
+      if (!byAssignee.has(key)) byAssignee.set(key, []);
+      byAssignee.get(key).push(t);
     }
   }
   for (const tasks of byAssignee.values()) {
@@ -345,32 +356,49 @@ const rows = computed(() => {
       }
     }
   } else if (groupBy.value === "assignee") {
-    const byUser = new Map();
+    const byPerson = new Map();
     const unassigned = [];
     for (const t of filteredTasks.value) {
-      if (!t.assignees.length) {
+      const keys = assigneeKeys(t);
+      if (!keys.length) {
         unassigned.push(t);
         continue;
       }
       for (const a of t.assignees) {
-        if (!byUser.has(a.id)) byUser.set(a.id, { user: a, tasks: [] });
-        byUser.get(a.id).tasks.push(t);
+        const key = `u-${a.id}`;
+        if (!byPerson.has(key)) {
+          byPerson.set(key, {
+            key,
+            name: `${a.first_name} ${a.last_name}`.trim() || a.email,
+            color: a.avatar_color,
+            initials: a.initials,
+            external: false,
+            tasks: [],
+          });
+        }
+        byPerson.get(key).tasks.push(t);
+      }
+      for (const c of t.external_assignees) {
+        const key = `e-${c.id}`;
+        if (!byPerson.has(key)) {
+          byPerson.set(key, { key, name: c.name, color: c.color, initials: c.initials, external: true, tasks: [] });
+        }
+        byPerson.get(key).tasks.push(t);
       }
     }
-    const sorted = [...byUser.values()].sort((a, b) =>
-      `${a.user.first_name} ${a.user.last_name}`.localeCompare(`${b.user.first_name} ${b.user.last_name}`)
-    );
-    for (const { user, tasks } of sorted) {
+    const sorted = [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name));
+    for (const person of sorted) {
       out.push({
-        key: `u-${user.id}`,
+        key: person.key,
         isGroupHeader: true,
-        label: `${user.first_name} ${user.last_name}`.trim() || user.email,
-        avatarColor: user.avatar_color,
-        avatarInitials: user.initials,
-        count: tasks.length,
+        label: person.name + (person.external ? " (externe)" : ""),
+        avatarColor: person.color,
+        avatarInitials: person.initials,
+        externalHeader: person.external,
+        count: person.tasks.length,
       });
-      for (const task of tasks.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""))) {
-        out.push({ key: `t-${task.id}-${user.id}`, task, bar: computeBar(task) });
+      for (const task of person.tasks.sort((a, b) => (a.start_date || "").localeCompare(b.start_date || ""))) {
+        out.push({ key: `t-${task.id}-${person.key}`, task, bar: computeBar(task) });
       }
     }
     if (unassigned.length) {
@@ -472,6 +500,9 @@ function scrollToToday() {
   height: 10px;
   border-radius: 50%;
   display: inline-block;
+}
+.external-avatar {
+  border: 2px dashed white;
 }
 .gantt-right-scroll {
   flex: 1 1 auto;
