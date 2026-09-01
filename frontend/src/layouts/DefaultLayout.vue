@@ -21,6 +21,18 @@
     <v-list-item prepend-icon="mdi-plus" title="Nouvel espace de travail" @click="newWorkspaceDialog = true" />
     <v-divider class="my-2" />
     <v-list-item
+      :to="{ name: 'dashboard' }"
+      prepend-icon="mdi-chart-box-outline"
+      title="Tableau de bord"
+      subtitle="Indicateurs et charge"
+    />
+    <v-list-item
+      :to="{ name: 'search' }"
+      prepend-icon="mdi-magnify"
+      title="Recherche avancee"
+      subtitle="Filtrer toutes les taches"
+    />
+    <v-list-item
       :to="{ name: 'portfolio' }"
       prepend-icon="mdi-view-agenda-outline"
       title="Vue multi-projets"
@@ -105,15 +117,33 @@
     </v-card>
   </v-dialog>
 
-  <v-dialog v-model="newProjectDialog" max-width="420">
+  <v-dialog v-model="newProjectDialog" max-width="460">
     <v-card title="Nouveau projet">
       <v-card-text>
         <v-text-field v-model="newProjectName" label="Nom du projet" autofocus @keyup.enter="createProject" />
+        <v-select
+          v-model="selectedTemplate"
+          :items="templateItems"
+          item-title="name"
+          item-value="id"
+          label="Partir d'un modele (optionnel)"
+          clearable
+          density="compact"
+        />
+        <v-text-field
+          v-if="selectedTemplate"
+          v-model="templateStartDate"
+          label="Date de debut du projet"
+          type="date"
+          density="compact"
+          hint="Toutes les taches du modele sont replanifiees a partir de cette date"
+          persistent-hint
+        />
       </v-card-text>
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="newProjectDialog = false">Annuler</v-btn>
-        <v-btn color="primary" @click="createProject">Creer</v-btn>
+        <v-btn color="primary" :disabled="!newProjectName.trim()" @click="createProject">Creer</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -124,7 +154,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const drawer = ref(true);
@@ -133,6 +163,8 @@ const newWorkspaceDialog = ref(false);
 const newWorkspaceName = ref("");
 const newProjectDialog = ref(false);
 const newProjectName = ref("");
+const selectedTemplate = ref(null);
+const templateStartDate = ref(new Date().toISOString().slice(0, 10));
 
 const authStore = useAuthStore();
 const workspaceStore = useWorkspaceStore();
@@ -177,12 +209,27 @@ async function createWorkspace() {
   newWorkspaceDialog.value = false;
 }
 
+const templateItems = computed(() => projectStore.templates);
+
+watch(newProjectDialog, async (open) => {
+  if (open && workspaceStore.current) {
+    selectedTemplate.value = null;
+    templateStartDate.value = new Date().toISOString().slice(0, 10);
+    await projectStore.fetchTemplates(workspaceStore.current.id);
+  }
+});
+
 async function createProject() {
   if (!newProjectName.value.trim() || !workspaceStore.current) return;
-  const project = await projectStore.createProject({
-    name: newProjectName.value,
-    workspace: workspaceStore.current.id,
-  });
+  const project = selectedTemplate.value
+    ? await projectStore.instantiateTemplate(selectedTemplate.value, {
+        name: newProjectName.value.trim(),
+        start_date: templateStartDate.value || null,
+      })
+    : await projectStore.createProject({
+        name: newProjectName.value.trim(),
+        workspace: workspaceStore.current.id,
+      });
   newProjectName.value = "";
   newProjectDialog.value = false;
   router.push({ name: "project", params: { id: project.id } });

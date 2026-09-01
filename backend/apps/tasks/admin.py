@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
+from apps.tasks.models import ActivityLog, Attachment, Comment, CustomFieldValue, Task, TaskDependency
 
 
 @admin.register(Task)
@@ -18,6 +18,11 @@ class TaskDependencyAdmin(admin.ModelAdmin):
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):
     list_display = ["task", "author", "created_at"]
+
+
+@admin.register(CustomFieldValue)
+class CustomFieldValueAdmin(admin.ModelAdmin):
+    list_display = ["task", "field", "value"]
 
 
 admin.site.register(Attachment)

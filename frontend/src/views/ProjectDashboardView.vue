@@ -23,6 +23,16 @@
         </div>
         <v-btn prepend-icon="mdi-account-multiple-outline" variant="tonal" class="mr-2" @click="membersDialog = true">Membres</v-btn>
         <v-btn v-if="isAdmin" color="primary" prepend-icon="mdi-plus" @click="openCreateTask()">Nouvelle tache</v-btn>
+        <v-menu v-if="isAdmin">
+          <template #activator="{ props: menuProps }">
+            <v-btn v-bind="menuProps" icon="mdi-dots-vertical" variant="text" class="ml-1" />
+          </template>
+          <v-list density="compact">
+            <v-list-item prepend-icon="mdi-form-select" title="Champs personnalises" @click="customFieldsDialog = true" />
+            <v-list-item prepend-icon="mdi-content-save-outline" title="Enregistrer comme modele" @click="openSaveTemplate" />
+            <v-list-item prepend-icon="mdi-content-copy" title="Dupliquer le projet" @click="duplicateProject" />
+          </v-list>
+        </v-menu>
       </div>
       <v-tabs v-model="tab" class="mt-4">
         <v-tab value="board" prepend-icon="mdi-view-column-outline">Tableau</v-tab>
@@ -55,6 +65,27 @@
       @created="onTaskCreated"
       @open-task="openTask"
     />
+
+    <CustomFieldsDialog v-model="customFieldsDialog" :project="projectStore.current" />
+
+    <v-dialog v-model="saveTemplateDialog" max-width="460">
+      <v-card title="Enregistrer comme modele">
+        <v-card-text>
+          <p class="text-caption text-medium-emphasis mb-3">
+            Le modele copie la structure (colonnes, etiquettes, champs personnalises) et le plan (taches,
+            dependances) sans l'avancement ni les assignations. Le projet actuel n'est pas modifie.
+          </p>
+          <v-text-field v-model="templateName" label="Nom du modele" autofocus @keyup.enter="saveAsTemplate" />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="saveTemplateDialog = false">Annuler</v-btn>
+          <v-btn color="primary" :disabled="!templateName.trim()" @click="saveAsTemplate">Enregistrer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-snackbar v-model="snackbar" :timeout="4000" color="success">{{ snackbarText }}</v-snackbar>
 
     <v-dialog v-model="membersDialog" max-width="520">
       <v-card title="Membres du projet">
@@ -112,6 +143,7 @@
 import CalendarView from "@/components/calendar/CalendarView.vue";
 import GanttChart from "@/components/gantt/GanttChart.vue";
 import KanbanBoard from "@/components/kanban/KanbanBoard.vue";
+import CustomFieldsDialog from "@/components/project/CustomFieldsDialog.vue";
 import TaskDetailDialog from "@/components/task/TaskDetailDialog.vue";
 import TaskListView from "@/components/task/TaskListView.vue";
 import { connectSocket } from "@/services/ws";
@@ -138,6 +170,11 @@ const defaultColumn = ref(null);
 const membersDialog = ref(false);
 const newMemberUserId = ref(null);
 const newMemberRole = ref("member");
+const customFieldsDialog = ref(false);
+const saveTemplateDialog = ref(false);
+const templateName = ref("");
+const snackbar = ref(false);
+const snackbarText = ref("");
 let socket = null;
 
 const isAdmin = computed(() => projectStore.current?.my_role === "admin");
@@ -227,6 +264,23 @@ function openCreateTask(columnId = null) {
 
 function onTaskCreated(task) {
   selectedTaskId.value = task.id;
+}
+
+function openSaveTemplate() {
+  templateName.value = `${projectStore.current.name} (modele)`;
+  saveTemplateDialog.value = true;
+}
+
+async function saveAsTemplate() {
+  const template = await projectStore.saveAsTemplate(projectStore.current.id, templateName.value.trim());
+  saveTemplateDialog.value = false;
+  snackbarText.value = `Modele "${template.name}" enregistre.`;
+  snackbar.value = true;
+}
+
+async function duplicateProject() {
+  const copy = await projectStore.duplicateProject(projectStore.current.id);
+  router.push({ name: "project", params: { id: copy.id } });
 }
 </script>
 

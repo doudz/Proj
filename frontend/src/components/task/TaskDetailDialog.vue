@@ -6,7 +6,24 @@
         <v-text-field v-model="createForm.title" label="Titre" autofocus @keyup.enter="create" />
         <v-row>
           <v-col cols="6"><v-text-field v-model="createForm.start_date" label="Debut" type="date" /></v-col>
-          <v-col cols="6"><v-text-field v-model="createForm.due_date" label="Echeance" type="date" /></v-col>
+          <v-col cols="6">
+            <v-text-field
+              v-model.number="createForm.duration_days"
+              label="Duree (jours)"
+              type="number"
+              min="1"
+              hint="Calcule l'echeance depuis la date de debut"
+              persistent-hint
+            />
+          </v-col>
+          <v-col cols="6">
+            <v-text-field
+              v-model="createForm.due_date"
+              label="Echeance"
+              type="date"
+              :disabled="!!createForm.duration_days && !!createForm.start_date"
+            />
+          </v-col>
         </v-row>
       </v-card-text>
       <v-card-actions>
@@ -77,6 +94,18 @@
                 type="date"
                 :readonly="!canEditFull"
                 @change="patch({ due_date: task.due_date })"
+              />
+            </v-col>
+            <v-col cols="6">
+              <v-text-field
+                v-model.number="durationDraft"
+                label="Duree (jours)"
+                type="number"
+                min="1"
+                :readonly="!canEditFull"
+                :hint="durationHint"
+                persistent-hint
+                @change="applyDuration"
               />
             </v-col>
             <v-col cols="12">
@@ -157,6 +186,45 @@
               />
             </v-col>
           </v-row>
+
+          <template v-if="customFields.length">
+            <v-divider class="my-2" />
+            <div class="text-subtitle-2 mb-2">Champs personnalises</div>
+            <v-row>
+              <v-col v-for="field in customFields" :key="field.id" :cols="field.field_type === 'checkbox' ? 12 : 6">
+                <v-checkbox
+                  v-if="field.field_type === 'checkbox'"
+                  :model-value="customDraft[field.id] === 'true'"
+                  :label="field.name"
+                  :readonly="!canEditState"
+                  density="compact"
+                  hide-details
+                  @update:model-value="(v) => saveCustom(field, v ? 'true' : 'false')"
+                />
+                <v-select
+                  v-else-if="field.field_type === 'select'"
+                  v-model="customDraft[field.id]"
+                  :items="field.options"
+                  :label="field.name"
+                  :readonly="!canEditState"
+                  clearable
+                  density="compact"
+                  hide-details
+                  @update:model-value="(v) => saveCustom(field, v)"
+                />
+                <v-text-field
+                  v-else
+                  v-model="customDraft[field.id]"
+                  :label="field.name"
+                  :type="inputTypeFor(field)"
+                  :readonly="!canEditState"
+                  density="compact"
+                  hide-details
+                  @blur="saveCustom(field, customDraft[field.id])"
+                />
+              </v-col>
+            </v-row>
+          </template>
 
           <v-divider class="my-2" />
           <div class="d-flex align-center mb-2">
@@ -343,6 +411,54 @@ const task = computed(() => (props.taskId ? taskStore.byId(Number(props.taskId))
 const canEditFull = computed(() => task.value?.can_edit_full ?? false);
 const canEditState = computed(() => task.value?.can_edit_state ?? false);
 const canComment = computed(() => props.project.my_role === "admin" || props.project.my_role === "member");
+
+const customFields = computed(() => props.project.custom_fields || []);
+// Local buffer so the inputs stay editable while the value is being typed;
+// it is re-synced from the server every time the task changes.
+const customDraft = reactive({});
+const durationDraft = ref(null);
+
+const durationHint = computed(() => {
+  if (!task.value?.start_date) return "Renseignez une date de debut pour piloter par duree";
+  return "Modifie l'echeance a partir de la date de debut";
+});
+
+watch(
+  task,
+  (value) => {
+    if (!value) return;
+    durationDraft.value = value.duration_days;
+    for (const key of Object.keys(customDraft)) delete customDraft[key];
+    for (const field of customFields.value) {
+      customDraft[field.id] = value.custom_values?.[String(field.id)] ?? "";
+    }
+  },
+  { immediate: true, deep: false }
+);
+
+function inputTypeFor(field) {
+  if (field.field_type === "number") return "number";
+  if (field.field_type === "date") return "date";
+  return "text";
+}
+
+async function saveCustom(field, value) {
+  if (!task.value || !canEditState.value) return;
+  const next = value ?? "";
+  if ((task.value.custom_values?.[String(field.id)] ?? "") === String(next)) return;
+  await patch({ custom_field_values: { [field.id]: next } });
+}
+
+async function applyDuration() {
+  if (!task.value || !canEditFull.value) return;
+  const value = Number(durationDraft.value);
+  if (!value || value < 1) {
+    durationDraft.value = task.value.duration_days;
+    return;
+  }
+  if (value === task.value.duration_days) return;
+  await patch({ duration_days: value });
+}
 const newSubtask = ref("");
 const pendingDependency = ref(null);
 const pendingBlocking = ref(false);
@@ -357,7 +473,7 @@ const priorities = [
   { title: "Urgente", value: "urgent" },
 ];
 
-const createForm = reactive({ title: "", start_date: "", due_date: "" });
+const createForm = reactive({ title: "", start_date: "", due_date: "", duration_days: null });
 
 watch(
   () => props.modelValue,
@@ -366,6 +482,7 @@ watch(
       createForm.title = "";
       createForm.start_date = "";
       createForm.due_date = "";
+      createForm.duration_days = null;
       pendingDependency.value = null;
       pendingBlocking.value = false;
       startError.value = "";
@@ -395,13 +512,20 @@ function close() {
 }
 
 async function create() {
-  const task_ = await taskStore.createTask({
+  const payload = {
     project: props.project.id,
     column: props.defaultColumn || props.project.columns[0]?.id,
     title: createForm.title,
     start_date: createForm.start_date || null,
     due_date: createForm.due_date || null,
-  });
+  };
+  // A duration is only meaningful with an anchor date; when both are given the
+  // backend derives the echeance from start + duration.
+  if (createForm.duration_days && createForm.start_date) {
+    payload.duration_days = Number(createForm.duration_days);
+    payload.due_date = null;
+  }
+  const task_ = await taskStore.createTask(payload);
   emit("created", task_);
 }
 

@@ -38,6 +38,17 @@
     <template #item.progress="{ item }">
       <v-progress-linear :model-value="item.progress" height="6" rounded color="success" style="width: 100px" />
     </template>
+    <template v-for="field in listCustomFields" :key="field.id" #[`item.cf_${field.id}`]="{ item }">
+      <span v-if="field.field_type === 'checkbox'">
+        <v-icon
+          :icon="item.custom_values?.[field.id] === 'true' ? 'mdi-check' : 'mdi-minus'"
+          size="16"
+          :color="item.custom_values?.[field.id] === 'true' ? 'success' : 'grey'"
+        />
+      </span>
+      <span v-else-if="item.custom_values?.[field.id]">{{ item.custom_values[field.id] }}</span>
+      <span v-else class="text-medium-emphasis">-</span>
+    </template>
     <template #item.actual_end_date="{ item }">
       <span v-if="item.actual_end_date">{{ item.actual_end_date }}</span>
       <span v-else-if="item.actual_start_date" class="text-medium-emphasis">en cours</span>
@@ -54,23 +65,28 @@
 
 <script setup>
 import { useTaskStore } from "@/stores/task";
+import { computed } from "vue";
 
 const props = defineProps({ project: { type: Object, required: true } });
 defineEmits(["open-task"]);
 
 const taskStore = useTaskStore();
 
-const headers = [
+const listCustomFields = computed(() => (props.project.custom_fields || []).filter((f) => f.show_in_list));
+
+const headers = computed(() => [
   { title: "Tache", key: "title" },
   { title: "Statut", key: "column" },
   { title: "Priorite", key: "priority" },
   { title: "Debut", key: "start_date" },
   { title: "Echeance", key: "due_date" },
+  { title: "Duree", key: "duration_days" },
   { title: "Fin reelle", key: "actual_end_date" },
   { title: "Ecart / ligne de base", key: "variance", sortable: false },
   { title: "Assignes", key: "assignees", sortable: false },
   { title: "Avancement", key: "progress" },
-];
+  ...listCustomFields.value.map((f) => ({ title: f.name, key: `cf_${f.id}`, sortable: false })),
+]);
 
 const priorityLabels = { low: "Basse", medium: "Moyenne", high: "Haute", urgent: "Urgente" };
 const priorityColors = { low: "grey", medium: "info", high: "warning", urgent: "error" };

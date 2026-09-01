@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
@@ -5,7 +7,7 @@ from apps.accounts.serializers import UserSerializer
 from apps.projects.models import Label
 from apps.projects.permissions import can_edit_task_state, is_project_admin
 from apps.projects.serializers import LabelSerializer
-from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
+from apps.tasks.models import ActivityLog, Attachment, Comment, CustomFieldValue, Task, TaskDependency
 from apps.workspaces.models import ExternalContact
 from apps.workspaces.serializers import ExternalContactSerializer
 
@@ -72,6 +74,12 @@ class TaskSerializer(serializers.ModelSerializer):
     workspace_name = serializers.CharField(source="project.workspace.name", read_only=True)
     can_edit_full = serializers.SerializerMethodField()
     can_edit_state = serializers.SerializerMethodField()
+    # Planned length in days: writing it moves due_date (or start_date when only
+    # the due date is known), so a task can be scheduled by duration instead of
+    # by picking an end date by hand.
+    duration_days = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+    custom_values = serializers.SerializerMethodField()
+    custom_field_values = serializers.DictField(write_only=True, required=False)
 
     class Meta:
         model = Task
@@ -89,6 +97,9 @@ class TaskSerializer(serializers.ModelSerializer):
             "description",
             "start_date",
             "due_date",
+            "duration_days",
+            "custom_values",
+            "custom_field_values",
             "baseline_start_date",
             "baseline_end_date",
             "actual_start_date",
@@ -160,6 +171,54 @@ class TaskSerializer(serializers.ModelSerializer):
             return False
         return can_edit_task_state(request.user, obj)
 
+    def get_custom_values(self, obj):
+        """{"<custom_field_id>": "value"} - the field definitions themselves come
+        with the project, so the task only carries what it holds."""
+        return {str(value.field_id): value.value for value in obj.custom_values.all()}
+
+    def _apply_duration(self, validated_data, instance=None):
+        """Turn a requested duration into concrete dates.
+
+        start_date + duration wins over an explicitly sent due_date, since
+        asking for a duration is asking for the end to be recomputed.
+        """
+        duration = validated_data.pop("duration_days", None)
+        if duration is None:
+            return validated_data
+        start = validated_data.get("start_date", getattr(instance, "start_date", None))
+        due = validated_data.get("due_date", getattr(instance, "due_date", None))
+        if start:
+            validated_data["due_date"] = start + timedelta(days=duration - 1)
+        elif due:
+            validated_data["start_date"] = due - timedelta(days=duration - 1)
+        return validated_data
+
+    def _save_custom_values(self, task, raw_values):
+        if not raw_values:
+            return
+        allowed_ids = set(task.project.custom_fields.values_list("id", flat=True))
+        for key, value in raw_values.items():
+            try:
+                field_id = int(key)
+            except (TypeError, ValueError):
+                continue
+            if field_id not in allowed_ids:
+                continue
+            CustomFieldValue.objects.update_or_create(
+                field_id=field_id, task=task, defaults={"value": "" if value is None else str(value)}
+            )
+
     def create(self, validated_data):
         validated_data["created_by"] = self.context["request"].user
-        return super().create(validated_data)
+        custom_values = validated_data.pop("custom_field_values", None)
+        validated_data = self._apply_duration(validated_data)
+        task = super().create(validated_data)
+        self._save_custom_values(task, custom_values)
+        return task
+
+    def update(self, instance, validated_data):
+        custom_values = validated_data.pop("custom_field_values", None)
+        validated_data = self._apply_duration(validated_data, instance)
+        task = super().update(instance, validated_data)
+        self._save_custom_values(task, custom_values)
+        return task

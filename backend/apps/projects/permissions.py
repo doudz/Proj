@@ -5,9 +5,16 @@ from apps.workspaces.models import Membership
 
 # Fields a "member" is allowed to change on a task they are assigned to -
 # this is the whole point of that role: change the *state* of their own
-# work (status, progress, real start/finish), nothing structural (title,
-# planned dates, dependencies, assignment...).
-MEMBER_EDITABLE_TASK_FIELDS = {"progress", "column", "actual_start_date", "actual_end_date"}
+# work (status, progress, real start/finish, the custom fields the project
+# asks them to fill in), nothing structural (title, planned dates and
+# duration, dependencies, assignment...).
+MEMBER_EDITABLE_TASK_FIELDS = {
+    "progress",
+    "column",
+    "actual_start_date",
+    "actual_end_date",
+    "custom_field_values",
+}
 
 
 def get_project_role(user, project):

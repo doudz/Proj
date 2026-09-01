@@ -22,6 +22,8 @@ const routes = [
       { path: "workspace", name: "workspaces", component: () => import("@/views/WorkspacesView.vue") },
       { path: "projects", name: "projects", component: () => import("@/views/ProjectsListView.vue") },
       { path: "portfolio", name: "portfolio", component: () => import("@/views/PortfolioView.vue") },
+      { path: "dashboard", name: "dashboard", component: () => import("@/views/DashboardView.vue") },
+      { path: "search", name: "search", component: () => import("@/views/SearchView.vue") },
       {
         path: "projects/:id",
         name: "project",

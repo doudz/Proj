@@ -21,6 +21,9 @@ class Project(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     baseline_captured_at = models.DateTimeField(null=True, blank=True)
+    # A template is a reusable blueprint: it never shows up in the normal project
+    # lists and is only used to spawn real projects (see ProjectViewSet.instantiate).
+    is_template = models.BooleanField(default=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="projects_created")
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through="ProjectMembership", related_name="projects", blank=True)
@@ -90,6 +93,41 @@ class Label(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CustomField(models.Model):
+    """A user-defined field added to every task of a project.
+
+    The project owns the definition; the value for a given task lives in
+    apps.tasks.models.CustomFieldValue. Values are always stored as text and
+    interpreted according to `field_type` - that keeps a single storage shape
+    while still letting the UI render the right editor and the search filter
+    on them.
+    """
+
+    class FieldType(models.TextChoices):
+        TEXT = "text", "Texte"
+        NUMBER = "number", "Nombre"
+        DATE = "date", "Date"
+        SELECT = "select", "Liste de choix"
+        CHECKBOX = "checkbox", "Case a cocher"
+        URL = "url", "Lien"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="custom_fields")
+    name = models.CharField(max_length=80)
+    field_type = models.CharField(max_length=10, choices=FieldType.choices, default=FieldType.TEXT)
+    # Choices for the "select" type, ignored otherwise.
+    options = models.JSONField(default=list, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    # When true the field gets its own column in the task list view.
+    show_in_list = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["order", "id"]
+        unique_together = ("project", "name")
+
+    def __str__(self):
+        return f"{self.project.name} / {self.name}"
 
 
 DEFAULT_COLUMNS = [

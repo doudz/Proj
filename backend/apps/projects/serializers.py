@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
-from apps.projects.models import BoardColumn, Label, Project, ProjectMembership
+from apps.projects.models import BoardColumn, CustomField, Label, Project, ProjectMembership
 from apps.projects.permissions import get_project_role
 
 User = get_user_model()
@@ -22,6 +22,13 @@ class LabelSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
+class CustomFieldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomField
+        fields = ["id", "project", "name", "field_type", "options", "order", "show_in_list"]
+        read_only_fields = ["id"]
+
+
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
 
@@ -35,6 +42,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     members = UserSerializer(many=True, read_only=True)
     columns = BoardColumnSerializer(many=True, read_only=True)
     labels = LabelSerializer(many=True, read_only=True)
+    custom_fields = CustomFieldSerializer(many=True, read_only=True)
     tasks_count = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
     my_role = serializers.SerializerMethodField()
@@ -52,10 +60,12 @@ class ProjectSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "baseline_captured_at",
+            "is_template",
             "created_at",
             "members",
             "columns",
             "labels",
+            "custom_fields",
             "tasks_count",
             "progress",
             "my_role",

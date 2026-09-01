@@ -2,6 +2,7 @@ from datetime import date
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db.models import Q
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,7 +39,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Task.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
         qs = qs.select_related("column", "project", "project__workspace").prefetch_related(
-            "assignees", "external_assignees", "labels", "predecessor_links"
+            "assignees", "external_assignees", "labels", "predecessor_links", "custom_values"
         )
         workspace_id = self.request.query_params.get("workspace")
         if workspace_id:
@@ -117,6 +118,104 @@ class TaskViewSet(viewsets.ModelViewSet):
     def activity(self, request, pk=None):
         task = self.get_object()
         return Response(ActivityLogSerializer(task.activity.all()[:50], many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="search")
+    def search(self, request):
+        """Advanced search across every project the user can see.
+
+        All criteria are optional and combine with AND; multi-valued ones
+        (projects, assignees, labels, priorities, statuses) are comma-separated
+        lists that match any of their values.
+        """
+        # Template projects are blueprints, not work in progress - their tasks
+        # would only be noise here (they are still reachable by opening the
+        # template itself).
+        qs = self.get_queryset().filter(project__is_template=False)
+        params = request.query_params
+
+        def id_list(name):
+            raw = params.get(name, "")
+            return [int(value) for value in raw.split(",") if value.strip().isdigit()]
+
+        def value_list(name):
+            raw = params.get(name, "")
+            return [value.strip() for value in raw.split(",") if value.strip()]
+
+        text = params.get("q", "").strip()
+        if text:
+            qs = qs.filter(
+                Q(title__icontains=text)
+                | Q(description__icontains=text)
+                | Q(custom_values__value__icontains=text)
+            )
+
+        workspace_id = params.get("workspace")
+        if workspace_id:
+            qs = qs.filter(project__workspace_id=workspace_id)
+        project_ids = id_list("projects")
+        if project_ids:
+            qs = qs.filter(project_id__in=project_ids)
+        assignee_ids = id_list("assignees")
+        if assignee_ids:
+            qs = qs.filter(assignees__id__in=assignee_ids)
+        label_ids = id_list("labels")
+        if label_ids:
+            qs = qs.filter(labels__id__in=label_ids)
+        column_ids = id_list("columns")
+        if column_ids:
+            qs = qs.filter(column_id__in=column_ids)
+        priorities = value_list("priorities")
+        if priorities:
+            qs = qs.filter(priority__in=priorities)
+
+        if params.get("unassigned") == "true":
+            qs = qs.filter(assignees__isnull=True, external_assignees__isnull=True)
+        if params.get("milestones_only") == "true":
+            qs = qs.filter(is_milestone=True)
+
+        for param, lookup in [
+            ("due_after", "due_date__gte"),
+            ("due_before", "due_date__lte"),
+            ("start_after", "start_date__gte"),
+            ("start_before", "start_date__lte"),
+        ]:
+            raw = params.get(param)
+            if raw:
+                try:
+                    qs = qs.filter(**{lookup: date.fromisoformat(raw)})
+                except ValueError:
+                    return Response({"detail": f"Date invalide pour {param}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        state = params.get("state")
+        today = date.today()
+        if state == "done":
+            qs = qs.filter(progress=100)
+        elif state == "open":
+            qs = qs.exclude(progress=100)
+        elif state == "late":
+            qs = qs.filter(due_date__lt=today).exclude(progress=100)
+        elif state == "in_progress":
+            qs = qs.filter(progress__gt=0).exclude(progress=100)
+        elif state == "not_started":
+            qs = qs.filter(progress=0)
+        elif state == "unscheduled":
+            qs = qs.filter(Q(start_date__isnull=True) | Q(due_date__isnull=True))
+        elif state == "blocked":
+            qs = qs.filter(predecessor_links__enforce_blocking=True).exclude(
+                predecessor_links__predecessor__progress=100
+            )
+
+        ordering = params.get("ordering") or "due_date"
+        allowed_ordering = {
+            "due_date", "-due_date", "start_date", "-start_date", "title", "-title",
+            "priority", "-priority", "progress", "-progress", "created_at", "-created_at",
+        }
+        if ordering not in allowed_ordering:
+            ordering = "due_date"
+
+        qs = qs.distinct().order_by(ordering)
+        limit = min(int(params.get("limit") or 200), 500)
+        return Response(TaskSerializer(qs[:limit], many=True, context={"request": request}).data)
 
     @action(detail=False, methods=["get"], url_path="mine")
     def mine(self, request):

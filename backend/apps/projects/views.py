@@ -1,3 +1,5 @@
+from datetime import date
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
@@ -6,10 +8,12 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.projects.models import DEFAULT_COLUMNS, BoardColumn, Label, Project, ProjectMembership
+from apps.projects.cloning import clone_project
+from apps.projects.models import DEFAULT_COLUMNS, BoardColumn, CustomField, Label, Project, ProjectMembership
 from apps.projects.permissions import require_project_admin
 from apps.projects.serializers import (
     BoardColumnSerializer,
+    CustomFieldSerializer,
     LabelSerializer,
     ProjectMembershipSerializer,
     ProjectSerializer,
@@ -25,11 +29,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "description"]
 
     def get_queryset(self):
-        return (
+        qs = (
             Project.objects.filter(workspace_id__in=user_workspace_ids(self.request.user))
-            .prefetch_related("members", "memberships__user", "columns", "labels")
+            .prefetch_related("members", "memberships__user", "columns", "labels", "custom_fields")
             .distinct()
         )
+        # Templates are blueprints, not work: they stay out of the project lists
+        # unless explicitly asked for (?is_template=true). Detail routes still
+        # reach them so a template can be opened, edited and instantiated.
+        if self.action == "list":
+            qs = qs.filter(is_template=self.request.query_params.get("is_template") == "true")
+        return qs
 
     @transaction.atomic
     def perform_create(self, serializer):
@@ -119,6 +129,52 @@ class ProjectViewSet(viewsets.ModelViewSet):
         memberships = project.memberships.select_related("user")
         return Response(ProjectMembershipSerializer(memberships, many=True).data)
 
+    @action(detail=True, methods=["post"], url_path="save-as-template")
+    def save_as_template(self, request, pk=None):
+        """Freeze the project's structure and plan as a reusable blueprint.
+
+        The live project is untouched - the template is a separate copy, so it
+        can be curated (renamed tasks, removed noise) without any risk.
+        """
+        project = self.get_object()
+        require_project_admin(request.user, project)
+        name = (request.data.get("name") or f"{project.name} (modele)").strip()
+        template = clone_project(
+            project, name=name, created_by=request.user, is_template=True, keep_assignees=False
+        )
+        return Response(
+            ProjectSerializer(template, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=["post"], url_path="instantiate")
+    def instantiate(self, request, pk=None):
+        """Create a real project from this template, optionally re-dated."""
+        template = self.get_object()
+        if not template.is_template:
+            return Response({"detail": "Ce projet n'est pas un modele."}, status=status.HTTP_400_BAD_REQUEST)
+        require_project_admin(request.user, template)
+        name = (request.data.get("name") or template.name).strip()
+        raw_start = request.data.get("start_date")
+        try:
+            start_date = date.fromisoformat(raw_start) if raw_start else None
+        except ValueError:
+            return Response({"detail": "Date de debut invalide."}, status=status.HTTP_400_BAD_REQUEST)
+        project = clone_project(template, name=name, created_by=request.user, start_date=start_date)
+        return Response(
+            ProjectSerializer(project, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=["post"], url_path="duplicate")
+    def duplicate(self, request, pk=None):
+        """Copy the project as a new independent project (plan only, no history)."""
+        project = self.get_object()
+        require_project_admin(request.user, project)
+        name = (request.data.get("name") or f"{project.name} (copie)").strip()
+        copy = clone_project(project, name=name, created_by=request.user, is_template=project.is_template)
+        return Response(
+            ProjectSerializer(copy, context={"request": request}).data, status=status.HTTP_201_CREATED
+        )
+
     @action(detail=True, methods=["delete"], url_path="members/(?P<user_id>[^/.]+)")
     def remove_member(self, request, pk=None, user_id=None):
         project = self.get_object()
@@ -134,6 +190,27 @@ class BoardColumnViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return BoardColumn.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
+
+    def perform_create(self, serializer):
+        require_project_admin(self.request.user, serializer.validated_data["project"])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        require_project_admin(self.request.user, serializer.instance.project)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        require_project_admin(self.request.user, instance.project)
+        instance.delete()
+
+
+class CustomFieldViewSet(viewsets.ModelViewSet):
+    serializer_class = CustomFieldSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project"]
+
+    def get_queryset(self):
+        return CustomField.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
 
     def perform_create(self, serializer):
         require_project_admin(self.request.user, serializer.validated_data["project"])

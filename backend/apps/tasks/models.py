@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-from apps.projects.models import BoardColumn, Label, Project
+from apps.projects.models import BoardColumn, CustomField, Label, Project
 
 
 class Task(models.Model):
@@ -66,6 +66,13 @@ class Task(models.Model):
     def is_done(self):
         return self.progress >= 100
 
+    @property
+    def duration_days(self):
+        """Planned length in calendar days, both ends included (1 day = same-day task)."""
+        if self.start_date and self.due_date:
+            return (self.due_date - self.start_date).days + 1
+        return None
+
     def is_blocked(self):
         """True if at least one *enforced* dependency links to a predecessor that isn't done yet."""
         return self.predecessor_links.filter(enforce_blocking=True).exclude(predecessor__progress=100).exists()
@@ -81,6 +88,24 @@ class Task(models.Model):
     def is_ready_to_start(self):
         """A task is 'available' once nothing blocks it and it hasn't been started yet."""
         return self.progress == 0 and self.actual_start_date is None and not self.is_blocked()
+
+
+class CustomFieldValue(models.Model):
+    """The value a given task holds for one of its project's custom fields.
+
+    Always stored as text; apps.projects.models.CustomField.field_type says how
+    to read it back (an empty string means "not filled in").
+    """
+
+    field = models.ForeignKey(CustomField, on_delete=models.CASCADE, related_name="values")
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="custom_values")
+    value = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("field", "task")
+
+    def __str__(self):
+        return f"{self.task.title} / {self.field.name} = {self.value}"
 
 
 class TaskDependency(models.Model):
