@@ -30,6 +30,11 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Task.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
         qs = qs.select_related("column", "project").prefetch_related("assignees", "labels", "predecessor_links")
+        workspace_id = self.request.query_params.get("workspace")
+        if workspace_id:
+            # Cross-project fetch for the portfolio Gantt - the base queryset above
+            # already restricts to workspaces the user belongs to, so this can only narrow it.
+            qs = qs.filter(project__workspace_id=workspace_id)
         if self.request.query_params.get("root_only") == "true":
             qs = qs.filter(parent__isnull=True)
         return qs.distinct()

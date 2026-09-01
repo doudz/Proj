@@ -14,7 +14,8 @@
 - **Taches** : dates de debut/echeance, avancement (%), priorite, sous-taches, pieces jointes, assignation multi-utilisateurs
 - **Dependances entre taches** (Fin->Debut, Debut->Debut, Fin->Fin, Debut->Fin), avec une option **bloquante** par dependance : la tache suivante ne peut pas etre demarree tant que la precedente n'est pas a 100% (voir ci-dessous)
 - **Ligne de base** (baseline) : figez le planning de reference et comparez-le au reel (dates de debut/fin reelles, libres par rapport aux dates planifiees, ecart en jours)
-- **Vue Gantt** : zoom jour / semaine / mois, glisser-deposer pour replanifier, redimensionnement des barres, fleches de dependances, jalons, ligne "aujourd'hui", comparaison visuelle ligne de base / reel
+- **Vue Gantt** (par projet) : zoom jour / semaine / mois, glisser-deposer pour replanifier, redimensionnement des barres, fleches de dependances, jalons, ligne "aujourd'hui", comparaison visuelle ligne de base / reel
+- **Vue multi-projets** (portfolio) : toutes les taches d'un espace de travail sur une seule frise, pour reperer les goulots d'etranglement (voir ci-dessous)
 - **Vue Kanban** : glisser-deposer entre colonnes
 - **Vue Liste** et **Vue Calendrier**
 - **Chat par tache** en temps reel (WebSocket) avec indicateur de saisie
@@ -27,6 +28,17 @@ Chaque dependance entre deux taches peut etre marquee comme **bloquante** (case 
 
 - La tache suivante ne peut pas etre demarree (bouton "Demarrer aujourd'hui" desactive, action API `/tasks/{id}/start/` refusee) tant que la tache precedente n'est pas a 100% d'avancement.
 - Des qu'une tache precedente passe a 100%, chaque tache suivante bloquee par elle est reevaluee : si elle est desormais debloquee (toutes ses dependances bloquantes sont terminees) et qu'elle est toujours a l'etat initial ("a commencer", c'est-a-dire 0% et sans date de debut reelle), ses assignes recoivent une notification en temps reel **et un e-mail** les informant que la tache est disponible.
+
+### Vue multi-projets (portfolio) et detection de goulots d'etranglement
+
+Accessible depuis le menu lateral (« Vue multi-projets »), cette vue affiche sur une seule frise Gantt les taches de **plusieurs projets** d'un meme espace de travail, avec :
+
+- des filtres par **projet**, par **assigne** et par **categorie** (etiquette, agregee par nom entre projets) ;
+- trois modes de regroupement : **par projet**, **par assigne** (pour reperer une personne surchargee sur plusieurs projets a la fois) et **par categorie** (pour verifier si toutes les taches d'une meme categorie se chevauchent ou sont bien etalees) ;
+- une **detection automatique des conflits de charge** : des qu'une meme personne a deux taches aux dates qui se chevauchent (tous projets confondus), les deux sont marquees d'un icone d'alerte (avec une info-bulle indiquant la tache en conflit) et comptabilisees dans le bandeau d'alerte en haut de la vue ;
+- un clic sur une barre ouvre directement la fiche de la tache dans son projet d'origine.
+
+Cette vue est en lecture/replanification simple (glisser-deposer pour changer les dates) mais n'affiche pas les dependances, la ligne de base ni le detail complet d'une tache : ces informations restent consultables projet par projet, en cliquant sur la tache.
 
 Cette option est desactivee par defaut sur chaque dependance : les dependances "informatives" (sans blocage) restent possibles pour simplement visualiser un enchainement sur le Gantt sans contraindre le demarrage.
 

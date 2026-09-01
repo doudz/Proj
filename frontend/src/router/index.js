@@ -20,6 +20,7 @@ const routes = [
     children: [
       { path: "", name: "workspaces", component: () => import("@/views/WorkspacesView.vue") },
       { path: "projects", name: "projects", component: () => import("@/views/ProjectsListView.vue") },
+      { path: "portfolio", name: "portfolio", component: () => import("@/views/PortfolioView.vue") },
       {
         path: "projects/:id",
         name: "project",

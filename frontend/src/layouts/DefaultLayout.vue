@@ -18,6 +18,13 @@
     </v-list-item>
     <v-list-item prepend-icon="mdi-plus" title="Nouvel espace de travail" @click="newWorkspaceDialog = true" />
     <v-divider class="my-2" />
+    <v-list-item
+      :to="{ name: 'portfolio' }"
+      prepend-icon="mdi-view-agenda-outline"
+      title="Vue multi-projets"
+      subtitle="Detecter les goulots d'etranglement"
+    />
+    <v-divider class="my-2" />
     <v-list-subheader>Projets</v-list-subheader>
     <v-list-item
       v-for="project in projectStore.projects"

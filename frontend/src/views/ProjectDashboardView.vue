@@ -10,11 +10,17 @@
           <p class="text-caption text-medium-emphasis mb-0">{{ projectStore.current.tasks_count }} tache(s) - {{ projectStore.current.progress }}% termine</p>
         </div>
         <v-spacer />
-        <v-avatar-group class="mr-4">
-          <v-avatar v-for="m in projectStore.current.members.slice(0, 5)" :key="m.id" :color="m.avatar_color" size="32" class="ml-n2">
+        <div class="d-flex mr-4">
+          <v-avatar
+            v-for="m in projectStore.current.members.slice(0, 5)"
+            :key="m.id"
+            :color="m.avatar_color"
+            size="32"
+            class="ml-n2 avatar-border"
+          >
             <span class="text-caption text-white">{{ m.initials }}</span>
           </v-avatar>
-        </v-avatar-group>
+        </div>
         <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreateTask()">Nouvelle tache</v-btn>
       </div>
       <v-tabs v-model="tab" class="mt-4">
@@ -62,12 +68,15 @@ import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useTaskStore } from "@/stores/task";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 const props = defineProps({ id: { type: [String, Number], required: true } });
 
 const projectStore = useProjectStore();
 const taskStore = useTaskStore();
 const notificationStore = useNotificationStore();
+const route = useRoute();
+const router = useRouter();
 
 const tab = ref("board");
 const taskDialog = ref(false);
@@ -89,6 +98,12 @@ async function load(id) {
       taskStore.fetchTasks(id);
     }
   });
+
+  if (route.query.openTask) {
+    tab.value = "gantt";
+    openTask(Number(route.query.openTask));
+    router.replace({ query: { ...route.query, openTask: undefined } });
+  }
 }
 
 onMounted(() => load(props.id));
@@ -111,3 +126,9 @@ function onTaskCreated(task) {
   selectedTaskId.value = task.id;
 }
 </script>
+
+<style scoped>
+.avatar-border {
+  border: 2px solid white;
+}
+</style>
