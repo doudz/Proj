@@ -120,6 +120,20 @@ docker compose logs -f db redis       # base de donnees / cache
 
 Si un conteneur boucle en erreur au demarrage, `docker compose logs backend` affiche generalement la cause (migration en echec, variable d'environnement manquante, base de donnees injoignable, etc.).
 
+**Erreur frequente : "FATAL: password authentication failed"** — PostgreSQL n'applique `POSTGRES_PASSWORD` (et `POSTGRES_USER`/`POSTGRES_DB`) que lors de la toute premiere initialisation du volume `postgres_data`. Si vous avez deja demarre le stack une fois (meme brievement, avec un `.env` different ou les valeurs par defaut), le volume garde l'ancien mot de passe et un `.env` modifie ensuite ne suffit plus a le changer. Deux solutions :
+
+```bash
+# Solution 1 (perte des donnees existantes) : reinitialiser le volume pour
+# qu'il se reinitialise avec le mot de passe actuel de .env
+docker compose down
+docker volume rm proj_postgres_data   # ou le nom exact vu dans `docker volume ls`
+docker compose up -d --build
+
+# Solution 2 (conserver les donnees) : changer le mot de passe dans PostgreSQL
+# lui-meme pour qu'il corresponde a POSTGRES_PASSWORD dans .env
+docker compose exec db psql -U ganttflow -c "ALTER USER ganttflow WITH PASSWORD 'le-mot-de-passe-de-votre-.env';"
+```
+
 ### Demarrage automatique au redemarrage du serveur
 
 Les conteneurs sont deja configures avec `restart: unless-stopped` : ils redemarrent automatiquement si le demon Docker redemarre (par exemple apres un reboot du serveur), a condition que Docker lui-meme soit active au demarrage :

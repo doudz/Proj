@@ -4,19 +4,40 @@ set -e
 echo "Attente de la base de donnees PostgreSQL (${POSTGRES_HOST:-db}:${POSTGRES_PORT:-5432})..."
 python - <<'PYEOF'
 import os
-import socket
+import sys
 import time
 
-host = os.environ.get("POSTGRES_HOST", "db")
-port = int(os.environ.get("POSTGRES_PORT", "5432"))
-for _ in range(60):
+import psycopg2
+
+params = dict(
+    host=os.environ.get("POSTGRES_HOST", "db"),
+    port=os.environ.get("POSTGRES_PORT", "5432"),
+    dbname=os.environ.get("POSTGRES_DB", "ganttflow"),
+    user=os.environ.get("POSTGRES_USER", "ganttflow"),
+    password=os.environ.get("POSTGRES_PASSWORD", "ganttflow"),
+    connect_timeout=3,
+)
+
+last_error = None
+for attempt in range(1, 61):
     try:
-        with socket.create_connection((host, port), timeout=2):
-            break
-    except OSError:
+        conn = psycopg2.connect(**params)
+        conn.close()
+        break
+    except psycopg2.OperationalError as exc:
+        last_error = exc
+        # Still starting up (connection refused) - keep waiting quietly.
+        # Anything else (bad password, unknown database...) is a real
+        # configuration problem: surface it immediately instead of
+        # retrying blindly for a full minute.
+        message = str(exc)
+        if "could not connect to server" not in message and "Connection refused" not in message:
+            print(f"Erreur de connexion PostgreSQL : {message.strip()}", file=sys.stderr)
+            sys.exit(1)
         time.sleep(1)
 else:
-    raise SystemExit("Impossible de joindre PostgreSQL")
+    print(f"Impossible de joindre PostgreSQL apres 60s : {last_error}", file=sys.stderr)
+    sys.exit(1)
 PYEOF
 
 echo "Application des migrations..."
