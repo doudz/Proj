@@ -97,6 +97,53 @@ docker compose up -d --build
 docker compose exec db pg_dump -U ganttflow ganttflow > backup.sql
 ```
 
+Pour restaurer : `cat backup.sql | docker compose exec -T db psql -U ganttflow ganttflow`.
+
+### Consulter les journaux / diagnostiquer un probleme
+
+```bash
+docker compose ps                     # etat des conteneurs
+docker compose logs -f backend        # API Django + WebSocket (Daphne)
+docker compose logs -f frontend       # Nginx (build + service du frontend)
+docker compose logs -f db redis       # base de donnees / cache
+```
+
+Si un conteneur boucle en erreur au demarrage, `docker compose logs backend` affiche generalement la cause (migration en echec, variable d'environnement manquante, base de donnees injoignable, etc.).
+
+### Demarrage automatique au redemarrage du serveur
+
+Les conteneurs sont deja configures avec `restart: unless-stopped` : ils redemarrent automatiquement si le demon Docker redemarre (par exemple apres un reboot du serveur), a condition que Docker lui-meme soit active au demarrage :
+
+```bash
+sudo systemctl enable docker
+```
+
+Aucune unite systemd supplementaire n'est necessaire pour l'application elle-meme.
+
+### Mettre l'application derriere HTTPS (exemple avec Caddy)
+
+Le conteneur `frontend` (Nginx) ecoute en clair sur le port defini par `HTTP_PORT` (80 par defaut). Pour exposer l'outil sur internet, placez un reverse proxy TLS devant, par exemple [Caddy](https://caddyserver.com/) qui obtient et renouvelle automatiquement un certificat Let's Encrypt.
+
+1. Dans `.env`, faites pointer `HTTP_PORT` sur un port interne non expose publiquement (ex: `HTTP_PORT=8080`), et mettez a jour `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` et `FRONTEND_URL` avec votre nom de domaine en `https://`.
+2. Installez Caddy sur le serveur (`apt install caddy` ou binaire officiel) et creez `/etc/caddy/Caddyfile` :
+
+   ```caddyfile
+   gantt.mondomaine.fr {
+       reverse_proxy 127.0.0.1:8080
+
+       # Necessaire pour le chat/les notifications en temps reel (WebSocket)
+       @websockets {
+           header Connection *Upgrade*
+           header Upgrade    websocket
+       }
+       reverse_proxy @websockets 127.0.0.1:8080
+   }
+   ```
+
+3. `sudo systemctl reload caddy`. Caddy gere seul l'obtention et le renouvellement du certificat TLS (DNS du domaine doit deja pointer vers le serveur).
+
+Traefik ou Nginx + certbot fonctionnent tout aussi bien si vous les preferez ; le point important est de transferer l'en-tete `Upgrade: websocket` pour que le chat et les notifications temps reel continuent de fonctionner a travers le proxy.
+
 ## Developpement local (sans Docker)
 
 ### Backend
