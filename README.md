@@ -120,7 +120,12 @@ docker compose logs -f db redis       # base de donnees / cache
 
 Si un conteneur boucle en erreur au demarrage, `docker compose logs backend` affiche generalement la cause (migration en echec, variable d'environnement manquante, base de donnees injoignable, etc.).
 
-**Erreur frequente : "FATAL: password authentication failed"** — PostgreSQL n'applique `POSTGRES_PASSWORD` (et `POSTGRES_USER`/`POSTGRES_DB`) que lors de la toute premiere initialisation du volume `postgres_data`. Si vous avez deja demarre le stack une fois (meme brievement, avec un `.env` different ou les valeurs par defaut), le volume garde l'ancien mot de passe et un `.env` modifie ensuite ne suffit plus a le changer. Deux solutions :
+**Erreur frequente : "FATAL: password authentication failed"** — PostgreSQL n'applique `POSTGRES_PASSWORD` (et `POSTGRES_USER`/`POSTGRES_DB`) que lors de la toute premiere initialisation du volume `postgres_data`. Deux causes possibles :
+
+- *Vous avez deja demarre le stack une fois* (meme brievement, avec un `.env` different ou les valeurs par defaut) : le volume garde l'ancien mot de passe et un `.env` modifie ensuite ne suffit plus a le changer.
+- *Le gestionnaire de stack utilise n'interpole pas les `${VARIABLE}` du fichier compose* : certains outils (Dockhand, selon leur version) ne supportent pas la substitution `${POSTGRES_USER:-ganttflow}` de docker-compose et l'ignorent silencieusement, ce qui initialisait auparavant PostgreSQL avec les identifiants par defaut au lieu de ceux de `.env`. Depuis la version actuelle du `docker-compose.yml`, le service `db` lit `.env` directement via `env_file` (comme le service `backend`) et n'est plus concerne par ce probleme - mettez a jour votre checkout si vous rencontrez encore ce cas.
+
+Dans les deux cas, la solution est la meme :
 
 ```bash
 # Solution 1 (perte des donnees existantes) : reinitialiser le volume pour
@@ -133,6 +138,8 @@ docker compose up -d --build
 # lui-meme pour qu'il corresponde a POSTGRES_PASSWORD dans .env
 docker compose exec db psql -U ganttflow -c "ALTER USER ganttflow WITH PASSWORD 'le-mot-de-passe-de-votre-.env';"
 ```
+
+**Le port choisi via `HTTP_PORT` dans `.env` n'est pas pris en compte** — le mapping de port (`ports:`) doit obligatoirement etre resolu par l'outil qui lance le stack, il ne peut pas etre lu depuis l'interieur d'un conteneur comme les autres variables. Si votre gestionnaire de stack n'applique pas cette substitution, definissez le port directement dans son interface (mapping de port du service `frontend` vers le port 80 interne) plutot que via `HTTP_PORT`.
 
 ### Demarrage automatique au redemarrage du serveur
 

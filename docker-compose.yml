@@ -2,14 +2,19 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ganttflow}
-      POSTGRES_USER: ${POSTGRES_USER:-ganttflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ganttflow}
+    # Read POSTGRES_DB/USER/PASSWORD straight from the .env file rather than
+    # through docker-compose's own ${VAR} interpolation: some stack managers
+    # (e.g. Dockhand) don't perform that interpolation, which silently falls
+    # back to the hardcoded defaults below and initializes Postgres with the
+    # wrong credentials on first boot - env_file is a plain, universally
+    # supported mechanism that sidesteps that entirely.
+    env_file: .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ganttflow}"]
+      # $$ (escaped) so the shell *inside* the container expands its own,
+      # correctly-set POSTGRES_USER - not docker-compose at parse time.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 5s
       timeout: 5s
       retries: 10
