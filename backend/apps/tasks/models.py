@@ -23,6 +23,16 @@ class Task(models.Model):
     due_date = models.DateField(null=True, blank=True)
     is_milestone = models.BooleanField(default=False)
 
+    # Reference plan, captured on demand from start_date/due_date (Project.set-baseline).
+    # Frozen until the baseline is recaptured or cleared - used to measure schedule drift.
+    baseline_start_date = models.DateField(null=True, blank=True)
+    baseline_end_date = models.DateField(null=True, blank=True)
+
+    # What actually happened - deliberately unconstrained relative to start_date/due_date
+    # so a task can be started or finished earlier or later than planned.
+    actual_start_date = models.DateField(null=True, blank=True)
+    actual_end_date = models.DateField(null=True, blank=True)
+
     progress = models.PositiveSmallIntegerField(default=0, validators=[MinValueValidator(0), MaxValueValidator(100)])
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
     color = models.CharField(max_length=7, blank=True)

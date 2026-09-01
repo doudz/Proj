@@ -43,6 +43,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "status",
             "start_date",
             "end_date",
+            "baseline_captured_at",
             "created_at",
             "members",
             "member_ids",
@@ -51,7 +52,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "tasks_count",
             "progress",
         ]
-        read_only_fields = ["id", "created_at"]
+        read_only_fields = ["id", "created_at", "baseline_captured_at"]
 
     def get_tasks_count(self, obj):
         return obj.tasks.count()

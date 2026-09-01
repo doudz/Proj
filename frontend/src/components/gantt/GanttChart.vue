@@ -7,9 +7,59 @@
         <v-btn value="month" size="small">Mois</v-btn>
       </v-btn-toggle>
       <v-btn class="ml-3" size="small" variant="tonal" prepend-icon="mdi-calendar-today" @click="scrollToToday">Aujourd'hui</v-btn>
+      <v-divider vertical class="mx-3" />
+      <v-switch
+        v-model="showBaseline"
+        :disabled="!project.baseline_captured_at"
+        label="Comparer a la ligne de base"
+        density="compact"
+        color="primary"
+        hide-details
+        class="flex-grow-0"
+      />
+      <span v-if="project.baseline_captured_at" class="text-caption text-medium-emphasis ml-2">
+        capturee le {{ formatCapturedAt(project.baseline_captured_at) }}
+      </span>
+      <v-btn
+        size="small"
+        variant="text"
+        class="ml-2"
+        prepend-icon="mdi-flag-outline"
+        @click="confirmBaseline = true"
+      >
+        {{ project.baseline_captured_at ? "Mettre a jour" : "Definir la ligne de base" }}
+      </v-btn>
+      <v-btn
+        v-if="project.baseline_captured_at"
+        size="small"
+        variant="text"
+        color="error"
+        @click="clearBaseline"
+      >
+        Effacer
+      </v-btn>
       <v-spacer />
+      <div v-if="showBaseline && project.baseline_captured_at" class="d-flex align-center ga-3 mr-4">
+        <span class="d-flex align-center text-caption"><span class="legend-swatch legend-baseline"></span>Ligne de base</span>
+        <span class="d-flex align-center text-caption"><span class="legend-swatch legend-actual"></span>Reel</span>
+      </div>
       <span class="text-caption text-medium-emphasis">Glissez une barre pour replanifier, tirez ses extremites pour redimensionner</span>
     </div>
+
+    <v-dialog v-model="confirmBaseline" max-width="440">
+      <v-card :title="project.baseline_captured_at ? 'Mettre a jour la ligne de base' : 'Definir la ligne de base'">
+        <v-card-text>
+          Les dates planifiees actuelles (debut/echeance) de chaque tache seront figees comme reference.
+          <span v-if="project.baseline_captured_at">La ligne de base precedente sera remplacee.</span>
+          Vous pourrez ensuite comparer le reel a cette reference.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="confirmBaseline = false">Annuler</v-btn>
+          <v-btn color="primary" @click="applyBaseline">Confirmer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <v-divider />
     <div ref="bodyRef" class="gantt-body flex-grow-1">
       <div class="gantt-left" :style="{ width: leftWidth + 'px' }">
@@ -76,13 +126,20 @@
             </svg>
 
             <template v-for="(row, index) in rows" :key="row.task.id">
+              <div
+                v-if="showBaseline && row.baselineBar"
+                class="gantt-baseline-bar"
+                :style="{ left: row.baselineBar.x + 'px', top: index * rowHeight + BAR_TOP - 7 + 'px', width: row.baselineBar.width + 'px' }"
+                :title="`Ligne de base : ${row.task.baseline_start_date} -> ${row.task.baseline_end_date}`"
+              ></div>
               <GanttBar
                 v-if="row.bar"
                 :task="row.task"
                 :x="row.bar.x"
                 :y="index * rowHeight"
                 :width="row.bar.width"
-                :row-height="rowHeight"
+                :bar-top="BAR_TOP"
+                :bar-height="BAR_HEIGHT"
                 :day-width="dayWidth"
                 @click="$emit('open-task', row.task.id)"
                 @reschedule="(delta) => onReschedule(row.task, delta)"
@@ -95,6 +152,13 @@
               >
                 Cliquer pour planifier
               </div>
+              <div
+                v-if="showBaseline && row.actualBar"
+                class="gantt-actual-bar"
+                :class="{ late: row.actualLate, early: row.actualLate === false }"
+                :style="{ left: row.actualBar.x + 'px', top: index * rowHeight + BAR_TOP + BAR_HEIGHT + 2 + 'px', width: row.actualBar.width + 'px' }"
+                :title="actualTooltip(row.task)"
+              ></div>
             </template>
           </div>
         </div>
@@ -106,19 +170,32 @@
 <script setup>
 import GanttBar from "@/components/gantt/GanttBar.vue";
 import { addDays, diffDays, formatDate, parseDate, ZOOM_LEVELS } from "@/components/gantt/ganttMath";
+import { useProjectStore } from "@/stores/project";
 import { useTaskStore } from "@/stores/task";
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
 const props = defineProps({ project: { type: Object, required: true } });
 defineEmits(["open-task"]);
 
 const taskStore = useTaskStore();
+const projectStore = useProjectStore();
 const zoom = ref("day");
 const collapsed = reactive(new Set());
 const bodyRef = ref(null);
+const showBaseline = ref(!!props.project.baseline_captured_at);
+const confirmBaseline = ref(false);
+
+watch(
+  () => props.project.baseline_captured_at,
+  (value) => {
+    if (value) showBaseline.value = true;
+  }
+);
 
 const leftWidth = 280;
-const rowHeight = 40;
+const rowHeight = 48;
+const BAR_TOP = 13;
+const BAR_HEIGHT = 22;
 const headerHeight = 52;
 const dayWidth = computed(() => ZOOM_LEVELS[zoom.value].dayWidth);
 
@@ -130,6 +207,10 @@ const range = computed(() => {
   for (const t of taskStore.tasks) {
     if (t.start_date) dates.push(parseDate(t.start_date));
     if (t.due_date) dates.push(parseDate(t.due_date));
+    if (t.baseline_start_date) dates.push(parseDate(t.baseline_start_date));
+    if (t.baseline_end_date) dates.push(parseDate(t.baseline_end_date));
+    if (t.actual_start_date) dates.push(parseDate(t.actual_start_date));
+    if (t.actual_end_date) dates.push(parseDate(t.actual_end_date));
   }
   const today = new Date();
   let min = dates.length ? new Date(Math.min(...dates)) : addDays(today, -7);
@@ -193,7 +274,15 @@ const rows = computed(() => {
       .sort((a, b) => a.order - b.order);
     for (const task of children) {
       const children_ = hasChildren(task.id);
-      out.push({ task, depth, hasChildren: children_, bar: computeBar(task) });
+      out.push({
+        task,
+        depth,
+        hasChildren: children_,
+        bar: computeBar(task),
+        baselineBar: computeRange(task.baseline_start_date, task.baseline_end_date),
+        actualBar: computeRange(task.actual_start_date, task.actual_end_date || (task.actual_start_date ? formatDate(new Date()) : null)),
+        actualLate: computeActualLate(task),
+      });
       if (children_ && !collapsed.has(task.id)) {
         walk(task.id, depth + 1);
       }
@@ -204,12 +293,51 @@ const rows = computed(() => {
 });
 
 function computeBar(task) {
-  if (!task.start_date || !task.due_date) return null;
-  const start = parseDate(task.start_date);
-  const due = parseDate(task.due_date);
+  return computeRange(task.start_date, task.due_date);
+}
+
+function computeRange(startIso, endIso) {
+  if (!startIso || !endIso) return null;
+  const start = parseDate(startIso);
+  const end = parseDate(endIso);
   const x = diffDays(range.value.start, start) * dayWidth.value;
-  const width = Math.max(dayWidth.value, (diffDays(start, due) + 1) * dayWidth.value);
+  const width = Math.max(dayWidth.value, (diffDays(start, end) + 1) * dayWidth.value);
   return { x, width };
+}
+
+function computeActualLate(task) {
+  if (!task.baseline_end_date) return null;
+  const referenceEnd = task.actual_end_date || (task.actual_start_date ? formatDate(new Date()) : null);
+  if (!referenceEnd) return null;
+  return parseDate(referenceEnd) > parseDate(task.baseline_end_date);
+}
+
+function actualTooltip(task) {
+  const start = task.actual_start_date || "?";
+  const end = task.actual_end_date || (task.actual_start_date ? "en cours" : "?");
+  if (task.end_variance_days === null || task.end_variance_days === undefined) {
+    return `Reel : ${start} -> ${end}`;
+  }
+  const variance = task.end_variance_days;
+  const label = variance > 0 ? `retard de ${variance} j` : variance < 0 ? `avance de ${-variance} j` : "a l'heure";
+  return `Reel : ${start} -> ${end} (${label} vs ligne de base)`;
+}
+
+function formatCapturedAt(value) {
+  return new Date(value).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+async function applyBaseline() {
+  await projectStore.setBaseline(props.project.id);
+  await taskStore.fetchTasks(props.project.id);
+  confirmBaseline.value = false;
+  showBaseline.value = true;
+}
+
+async function clearBaseline() {
+  await projectStore.clearBaseline(props.project.id);
+  await taskStore.fetchTasks(props.project.id);
+  showBaseline.value = false;
 }
 
 const links = computed(() => {
@@ -379,6 +507,38 @@ function scrollToToday() {
   stroke: #90a4ae;
   stroke-width: 1.5;
   marker-end: url(#gantt-arrow);
+}
+.gantt-baseline-bar {
+  position: absolute;
+  height: 6px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(45deg, #b0bec5, #b0bec5 4px, #cfd8dc 4px, #cfd8dc 8px);
+  opacity: 0.9;
+}
+.gantt-actual-bar {
+  position: absolute;
+  height: 6px;
+  border-radius: 3px;
+  background: #66bb6a;
+}
+.gantt-actual-bar.late {
+  background: #ef5350;
+}
+.gantt-actual-bar.early {
+  background: #66bb6a;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+.legend-baseline {
+  background: repeating-linear-gradient(45deg, #b0bec5, #b0bec5 3px, #cfd8dc 3px, #cfd8dc 6px);
+}
+.legend-actual {
+  background: #66bb6a;
 }
 .gantt-noschedule {
   position: absolute;

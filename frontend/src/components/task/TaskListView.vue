@@ -28,6 +28,17 @@
     <template #item.progress="{ item }">
       <v-progress-linear :model-value="item.progress" height="6" rounded color="success" style="width: 100px" />
     </template>
+    <template #item.actual_end_date="{ item }">
+      <span v-if="item.actual_end_date">{{ item.actual_end_date }}</span>
+      <span v-else-if="item.actual_start_date" class="text-medium-emphasis">en cours</span>
+      <span v-else class="text-medium-emphasis">-</span>
+    </template>
+    <template #item.variance="{ item }">
+      <v-chip v-if="item.end_variance_days > 0" size="small" color="error" variant="tonal">+{{ item.end_variance_days }} j</v-chip>
+      <v-chip v-else-if="item.end_variance_days < 0" size="small" color="success" variant="tonal">{{ item.end_variance_days }} j</v-chip>
+      <v-chip v-else-if="item.end_variance_days === 0" size="small" color="grey" variant="tonal">a l'heure</v-chip>
+      <span v-else class="text-medium-emphasis">-</span>
+    </template>
   </v-data-table>
 </template>
 
@@ -45,6 +56,8 @@ const headers = [
   { title: "Priorite", key: "priority" },
   { title: "Debut", key: "start_date" },
   { title: "Echeance", key: "due_date" },
+  { title: "Fin reelle", key: "actual_end_date" },
+  { title: "Ecart / ligne de base", key: "variance", sortable: false },
   { title: "Assignes", key: "assignees", sortable: false },
   { title: "Avancement", key: "progress" },
 ];

@@ -1,3 +1,5 @@
+from datetime import date
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from rest_framework import permissions, status, viewsets
@@ -78,9 +80,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         start_date = request.data.get("start_date")
         due_date = request.data.get("due_date")
         if start_date:
-            task.start_date = start_date
+            task.start_date = date.fromisoformat(start_date)
         if due_date:
-            task.due_date = due_date
+            task.due_date = date.fromisoformat(due_date)
         task.save(update_fields=["start_date", "due_date"])
         log_activity(task, request.user, "a replanifie la tache", {"start_date": start_date, "due_date": due_date})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
@@ -90,6 +92,31 @@ class TaskViewSet(viewsets.ModelViewSet):
     def activity(self, request, pk=None):
         task = self.get_object()
         return Response(ActivityLogSerializer(task.activity.all()[:50], many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="start")
+    def start(self, request, pk=None):
+        """Record the real start date - independent from the planned start_date,
+        so a task can be marked as started before or after it was scheduled."""
+        task = self.get_object()
+        raw_date = request.data.get("date")
+        task.actual_start_date = date.fromisoformat(raw_date) if raw_date else date.today()
+        task.save(update_fields=["actual_start_date"])
+        log_activity(task, request.user, "a demarre la tache", {"actual_start_date": str(task.actual_start_date)})
+        self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        return Response(TaskSerializer(task).data)
+
+    @action(detail=True, methods=["post"], url_path="complete")
+    def complete(self, request, pk=None):
+        """Record the real finish date and mark the task done - independent from
+        the planned due_date, so it can be completed before or after schedule."""
+        task = self.get_object()
+        raw_date = request.data.get("date")
+        task.actual_end_date = date.fromisoformat(raw_date) if raw_date else date.today()
+        task.progress = 100
+        task.save(update_fields=["actual_end_date", "progress"])
+        log_activity(task, request.user, "a termine la tache", {"actual_end_date": str(task.actual_end_date)})
+        self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        return Response(TaskSerializer(task).data)
 
 
 class TaskDependencyViewSet(viewsets.ModelViewSet):

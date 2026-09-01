@@ -46,5 +46,15 @@ export const useProjectStore = defineStore("project", {
       if (this.current) this.current.labels.push(data);
       return data;
     },
+    async setBaseline(projectId) {
+      const { data } = await api.post(`/projects/${projectId}/set-baseline/`);
+      if (this.current?.id === projectId) this.current = data;
+      return data;
+    },
+    async clearBaseline(projectId) {
+      const { data } = await api.post(`/projects/${projectId}/clear-baseline/`);
+      if (this.current?.id === projectId) this.current = data;
+      return data;
+    },
   },
 });

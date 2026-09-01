@@ -104,6 +104,41 @@
 
           <v-divider class="my-2" />
           <div class="d-flex align-center mb-2">
+            <span class="text-subtitle-2">Suivi reel</span>
+            <v-spacer />
+            <v-btn size="x-small" variant="tonal" class="mr-1" @click="startNow">Demarrer aujourd'hui</v-btn>
+            <v-btn size="x-small" variant="tonal" color="success" @click="completeNow">Terminer aujourd'hui</v-btn>
+          </div>
+          <p class="text-caption text-medium-emphasis mb-2">
+            Les dates reelles sont libres : une tache peut demarrer ou se terminer avant ou apres les dates planifiees ci-dessus.
+          </p>
+          <v-row>
+            <v-col cols="6">
+              <v-text-field
+                v-model="task.actual_start_date"
+                label="Debut reel"
+                type="date"
+                @change="patch({ actual_start_date: task.actual_start_date || null })"
+              />
+            </v-col>
+            <v-col cols="6">
+              <v-text-field
+                v-model="task.actual_end_date"
+                label="Fin reelle"
+                type="date"
+                @change="patch({ actual_end_date: task.actual_end_date || null })"
+              />
+            </v-col>
+          </v-row>
+          <v-alert v-if="task.baseline_start_date" density="compact" variant="tonal" color="blue-grey" class="mb-2">
+            <div class="text-caption">
+              Ligne de base : {{ task.baseline_start_date }} &rarr; {{ task.baseline_end_date }}
+            </div>
+            <div v-if="varianceLabel" class="text-caption font-weight-medium">{{ varianceLabel }}</div>
+          </v-alert>
+
+          <v-divider class="my-2" />
+          <div class="d-flex align-center mb-2">
             <span class="text-subtitle-2">Sous-taches ({{ subtasks.length }})</span>
           </div>
           <v-list density="compact">
@@ -233,6 +268,23 @@ async function create() {
 async function patch(payload) {
   if (task.value) await taskStore.updateTask(task.value.id, payload);
 }
+
+async function startNow() {
+  if (task.value) await taskStore.startTask(task.value.id);
+}
+
+async function completeNow() {
+  if (task.value) await taskStore.completeTask(task.value.id);
+}
+
+const varianceLabel = computed(() => {
+  if (!task.value) return "";
+  const variance = task.value.end_variance_days;
+  if (variance === null || variance === undefined) return "";
+  if (variance > 0) return `Retard de ${variance} jour(s) par rapport a la ligne de base`;
+  if (variance < 0) return `Avance de ${-variance} jour(s) par rapport a la ligne de base`;
+  return "Termine a la date prevue par la ligne de base";
+});
 
 function onAssigneesChange(values) {
   const ids = values.map((v) => (typeof v === "object" ? v.id : v));

@@ -84,6 +84,9 @@ async function load(id) {
       taskStore.applyRealtimeEvent(message.kind, message.payload);
     } else if (message.kind === "notification.created") {
       notificationStore.pushRealtime(message.payload);
+    } else if (message.kind === "baseline.updated") {
+      projectStore.fetchProject(id);
+      taskStore.fetchTasks(id);
     }
   });
 }

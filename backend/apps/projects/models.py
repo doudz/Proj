@@ -20,6 +20,7 @@ class Project(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
+    baseline_captured_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="projects_created")
     created_at = models.DateTimeField(auto_now_add=True)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="projects", blank=True)

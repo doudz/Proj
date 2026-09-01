@@ -56,6 +56,16 @@ export const useTaskStore = defineStore("task", {
       this._upsert(data);
       return data;
     },
+    async startTask(id, date = null) {
+      const { data } = await api.post(`/tasks/${id}/start/`, date ? { date } : {});
+      this._upsert(data);
+      return data;
+    },
+    async completeTask(id, date = null) {
+      const { data } = await api.post(`/tasks/${id}/complete/`, date ? { date } : {});
+      this._upsert(data);
+      return data;
+    },
     async addDependency(predecessor, successor, type = "FS") {
       const { data } = await api.post("/task-dependencies/", { predecessor, successor, type });
       this.dependencies.push(data);

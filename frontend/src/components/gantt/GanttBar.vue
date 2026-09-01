@@ -2,7 +2,7 @@
   <div
     v-if="task.is_milestone"
     class="gantt-milestone"
-    :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + rowHeight / 2 - 8 + 'px' }"
+    :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px' }"
     :title="task.title"
     @pointerdown.stop="startDrag($event, 'move')"
     @click.stop="$emit('click')"
@@ -11,7 +11,7 @@
     v-else
     class="gantt-bar"
     :class="{ dragging }"
-    :style="{ left: liveX + 'px', top: y + 6 + 'px', width: liveWidth + 'px', height: rowHeight - 12 + 'px', background: task.color || defaultColor }"
+    :style="{ left: liveX + 'px', top: y + barTop + 'px', width: liveWidth + 'px', height: barHeight + 'px', background: task.color || defaultColor }"
     :title="task.title"
     @pointerdown.stop="startDrag($event, 'move')"
     @click.stop="$emit('click')"
@@ -31,8 +31,9 @@ const props = defineProps({
   x: { type: Number, required: true },
   y: { type: Number, required: true },
   width: { type: Number, required: true },
-  rowHeight: { type: Number, required: true },
   dayWidth: { type: Number, required: true },
+  barTop: { type: Number, default: 6 },
+  barHeight: { type: Number, default: 28 },
 });
 const emit = defineEmits(["click", "reschedule"]);
 

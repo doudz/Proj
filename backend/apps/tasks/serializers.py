@@ -54,6 +54,8 @@ class TaskSerializer(serializers.ModelSerializer):
     predecessors = TaskDependencySerializer(source="predecessor_links", many=True, read_only=True)
     comments_count = serializers.SerializerMethodField()
     subtasks_count = serializers.SerializerMethodField()
+    start_variance_days = serializers.SerializerMethodField()
+    end_variance_days = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -66,6 +68,12 @@ class TaskSerializer(serializers.ModelSerializer):
             "description",
             "start_date",
             "due_date",
+            "baseline_start_date",
+            "baseline_end_date",
+            "actual_start_date",
+            "actual_end_date",
+            "start_variance_days",
+            "end_variance_days",
             "is_milestone",
             "progress",
             "priority",
@@ -82,13 +90,30 @@ class TaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_by", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "baseline_start_date",
+            "baseline_end_date",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_comments_count(self, obj):
         return obj.comments.count()
 
     def get_subtasks_count(self, obj):
         return obj.subtasks.count()
+
+    def get_start_variance_days(self, obj):
+        if obj.baseline_start_date and obj.actual_start_date:
+            return (obj.actual_start_date - obj.baseline_start_date).days
+        return None
+
+    def get_end_variance_days(self, obj):
+        if obj.baseline_end_date and obj.actual_end_date:
+            return (obj.actual_end_date - obj.baseline_end_date).days
+        return None
 
     def create(self, validated_data):
         validated_data["created_by"] = self.context["request"].user
