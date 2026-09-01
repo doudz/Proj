@@ -37,7 +37,30 @@ export const useTaskStore = defineStore("task", {
     async updateTask(id, payload) {
       const { data } = await api.patch(`/tasks/${id}/`, payload);
       this._upsert(data);
+      // A date change can shift every downstream task, so pull the successors
+      // back in rather than leaving stale dates on screen.
+      if (this._touchesSchedule(payload)) await this._refreshSuccessors(id);
       return data;
+    },
+    async refreshTask(id) {
+      const { data } = await api.get(`/tasks/${id}/`);
+      this._upsert(data);
+      return data;
+    },
+    async _refreshSuccessors(id) {
+      const downstream = this._downstreamIds(id);
+      await Promise.all([...downstream].map((taskId) => this.refreshTask(taskId)));
+    },
+    _downstreamIds(id, seen = new Set()) {
+      for (const dep of this.dependencies.filter((d) => d.predecessor === id)) {
+        if (seen.has(dep.successor)) continue;
+        seen.add(dep.successor);
+        this._downstreamIds(dep.successor, seen);
+      }
+      return seen;
+    },
+    _touchesSchedule(payload) {
+      return ["start_date", "due_date", "duration_days"].some((key) => key in payload);
     },
     async deleteTask(id) {
       await api.delete(`/tasks/${id}/`);
@@ -54,6 +77,7 @@ export const useTaskStore = defineStore("task", {
         due_date: dueDate,
       });
       this._upsert(data);
+      await this._refreshSuccessors(id);
       return data;
     },
     async startTask(id, date = null) {

@@ -151,14 +151,14 @@ class DashboardView(APIView):
             tasks.filter(due_date__gte=today, due_date__lte=today + timedelta(days=UPCOMING_DAYS))
             .exclude(progress=100)
             .select_related("project", "column", "project__workspace")
-            .prefetch_related("assignees", "external_assignees", "labels", "predecessor_links")
+            .prefetch_related("assignees", "external_assignees", "labels", "predecessor_links__predecessor")
             .order_by("due_date")[:UPCOMING_LIMIT]
         )
         overdue_qs = (
             tasks.filter(due_date__lt=today)
             .exclude(progress=100)
             .select_related("project", "column", "project__workspace")
-            .prefetch_related("assignees", "external_assignees", "labels", "predecessor_links")
+            .prefetch_related("assignees", "external_assignees", "labels", "predecessor_links__predecessor")
             .order_by("due_date")[:UPCOMING_LIMIT]
         )
         context = {"request": request}

@@ -11,16 +11,18 @@
   <div
     v-else
     class="gantt-bar"
-    :class="{ dragging, 'not-draggable': !canDrag }"
+    :class="{ dragging, 'not-draggable': !canMove }"
     :style="{ left: liveX + 'px', top: y + barTop + 'px', width: liveWidth + 'px', height: barHeight + 'px', background: task.color || defaultColor }"
-    :title="task.title"
-    @pointerdown.stop="canDrag && startDrag($event, 'move')"
-    @click.stop="!canDrag && $emit('click')"
+    :title="barTitle"
+    @pointerdown.stop="canMove && startDrag($event, 'move')"
+    @click.stop="!canMove && $emit('click')"
   >
     <div class="gantt-bar-progress" :style="{ width: task.progress + '%' }"></div>
+    <v-icon v-if="task.is_start_locked" icon="mdi-lock" size="11" class="gantt-bar-lock" />
     <span class="gantt-bar-label">{{ task.title }}</span>
     <template v-if="canDrag">
-      <div class="gantt-handle left" @pointerdown.stop="startDrag($event, 'resize-start')"></div>
+      <!-- A dependency-driven start cannot be dragged: only the end is free. -->
+      <div v-if="!task.is_start_locked" class="gantt-handle left" @pointerdown.stop="startDrag($event, 'resize-start')"></div>
       <div class="gantt-handle right" @pointerdown.stop="startDrag($event, 'resize-end')"></div>
     </template>
   </div>
@@ -42,6 +44,14 @@ const props = defineProps({
 const emit = defineEmits(["click", "reschedule"]);
 
 const defaultColor = "#42A5F5";
+// A task whose start comes from a predecessor can only be stretched from its
+// end - sliding the whole bar would fight the dependency.
+const canMove = computed(() => props.canDrag && !props.task.is_start_locked);
+const barTitle = computed(() =>
+  props.task.is_start_locked
+    ? `${props.task.title} - debut impose par la tache precedente`
+    : props.task.title
+);
 const dragging = ref(false);
 const mode = ref(null);
 const startPointerX = ref(0);
@@ -125,6 +135,11 @@ function onUp() {
   bottom: 0;
   background: rgba(0, 0, 0, 0.25);
   border-radius: 6px 0 0 6px;
+}
+.gantt-bar-lock {
+  position: relative;
+  color: rgba(255, 255, 255, 0.9);
+  margin-left: 5px;
 }
 .gantt-bar-label {
   position: relative;

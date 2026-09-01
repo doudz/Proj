@@ -7,7 +7,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.projects.permissions import (
     can_edit_task_state,
@@ -16,6 +16,7 @@ from apps.projects.permissions import (
     require_task_state_permission,
 )
 from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
+from apps.tasks.scheduling import apply_schedule, reschedule_successors, would_create_cycle
 from apps.tasks.serializers import (
     ActivityLogSerializer,
     AttachmentSerializer,
@@ -39,7 +40,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Task.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
         qs = qs.select_related("column", "project", "project__workspace").prefetch_related(
-            "assignees", "external_assignees", "labels", "predecessor_links", "custom_values"
+            "assignees", "external_assignees", "labels", "predecessor_links__predecessor", "custom_values"
         )
         workspace_id = self.request.query_params.get("workspace")
         if workspace_id:
@@ -61,8 +62,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         changed_fields = set(self.request.data.keys())
         require_task_state_permission(self.request.user, task, changed_fields)
         task = serializer.save()
+        # Dependencies own the start date, so re-snap this task and drag the
+        # rest of the chain along with it.
+        apply_schedule(task)
         log_activity(task, self.request.user, "a modifie la tache")
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        self._broadcast_moved(reschedule_successors(task))
 
     def perform_destroy(self, instance):
         require_project_admin(self.request.user, instance.project)
@@ -79,6 +84,11 @@ class TaskViewSet(viewsets.ModelViewSet):
             f"project_{project_id}",
             {"type": "broadcast.event", "event": event_type, "payload": payload},
         )
+
+    def _broadcast_moved(self, tasks):
+        """Tell every open board about the tasks a cascade just shifted."""
+        for task in tasks:
+            self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
 
     @action(detail=True, methods=["post"], url_path="move")
     def move(self, request, pk=None):
@@ -110,8 +120,11 @@ class TaskViewSet(viewsets.ModelViewSet):
         if due_date:
             task.due_date = date.fromisoformat(due_date)
         task.save(update_fields=["start_date", "due_date"])
+        # The dependencies have the last word on where this task starts.
+        apply_schedule(task)
         log_activity(task, request.user, "a replanifie la tache", {"start_date": start_date, "due_date": due_date})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        self._broadcast_moved(reschedule_successors(task))
         return Response(TaskSerializer(task).data)
 
     @action(detail=True, methods=["get"], url_path="activity")
@@ -274,16 +287,45 @@ class TaskDependencyViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        require_project_admin(self.request.user, serializer.validated_data["predecessor"].project)
-        serializer.save()
+        predecessor = serializer.validated_data["predecessor"]
+        successor = serializer.validated_data["successor"]
+        require_project_admin(self.request.user, predecessor.project)
+        # A circular chain has no solvable schedule - each task would wait on
+        # the other - so the link is refused rather than silently ignored.
+        if would_create_cycle(predecessor, successor):
+            raise ValidationError(
+                {"detail": "Cette dependance creerait un cycle : la tache precedente depend deja de la suivante."}
+            )
+        dependency = serializer.save()
+        self._apply_and_broadcast(dependency.successor)
 
     def perform_update(self, serializer):
         require_project_admin(self.request.user, serializer.instance.predecessor.project)
-        serializer.save()
+        dependency = serializer.save()
+        self._apply_and_broadcast(dependency.successor)
 
     def perform_destroy(self, instance):
         require_project_admin(self.request.user, instance.predecessor.project)
+        successor = instance.successor
         instance.delete()
+        # The successor may now be free (or driven by a different link).
+        successor.refresh_from_db()
+        self._apply_and_broadcast(successor)
+
+    def _apply_and_broadcast(self, successor):
+        """Re-snap the successor onto its links and push the change downstream."""
+        moved = []
+        if apply_schedule(successor):
+            moved.append(successor)
+        moved.extend(reschedule_successors(successor))
+        layer = get_channel_layer()
+        if layer is None:
+            return
+        for task in moved:
+            async_to_sync(layer.group_send)(
+                f"project_{task.project_id}",
+                {"type": "broadcast.event", "event": "task.updated", "payload": TaskSerializer(task).data},
+            )
 
 
 class CommentViewSet(viewsets.ModelViewSet):

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="GanttFlow">
+  <rect width="64" height="64" rx="14" fill="#1976D2" />
+  <!-- Three Gantt bars, cascading like a dependency chain -->
+  <rect x="12" y="16" width="28" height="8" rx="4" fill="#FFFFFF" />
+  <rect x="20" y="28" width="30" height="8" rx="4" fill="#90CAF9" />
+  <rect x="30" y="40" width="22" height="8" rx="4" fill="#FFFFFF" opacity="0.75" />
+</svg>
