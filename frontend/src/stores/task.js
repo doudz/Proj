@@ -66,14 +66,25 @@ export const useTaskStore = defineStore("task", {
       this._upsert(data);
       return data;
     },
-    async addDependency(predecessor, successor, type = "FS") {
-      const { data } = await api.post("/task-dependencies/", { predecessor, successor, type });
+    async addDependency(predecessor, successor, type = "FS", enforceBlocking = false) {
+      const { data } = await api.post("/task-dependencies/", {
+        predecessor,
+        successor,
+        type,
+        enforce_blocking: enforceBlocking,
+      });
       this.dependencies.push(data);
       return data;
     },
     async removeDependency(id) {
       await api.delete(`/task-dependencies/${id}/`);
       this.dependencies = this.dependencies.filter((d) => d.id !== id);
+    },
+    async toggleDependencyBlocking(id, enforceBlocking) {
+      const { data } = await api.patch(`/task-dependencies/${id}/`, { enforce_blocking: enforceBlocking });
+      const idx = this.dependencies.findIndex((d) => d.id === id);
+      if (idx !== -1) this.dependencies[idx] = data;
+      return data;
     },
     applyRealtimeEvent(kind, payload) {
       if (kind === "task.created" || kind === "task.updated") {

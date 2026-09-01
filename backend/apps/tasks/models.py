@@ -61,6 +61,22 @@ class Task(models.Model):
     def is_done(self):
         return self.progress >= 100
 
+    def is_blocked(self):
+        """True if at least one *enforced* dependency links to a predecessor that isn't done yet."""
+        return self.predecessor_links.filter(enforce_blocking=True).exclude(predecessor__progress=100).exists()
+
+    def blocking_predecessor_tasks(self):
+        return [
+            link.predecessor
+            for link in self.predecessor_links.filter(enforce_blocking=True)
+            .exclude(predecessor__progress=100)
+            .select_related("predecessor")
+        ]
+
+    def is_ready_to_start(self):
+        """A task is 'available' once nothing blocks it and it hasn't been started yet."""
+        return self.progress == 0 and self.actual_start_date is None and not self.is_blocked()
+
 
 class TaskDependency(models.Model):
     class Type(models.TextChoices):
@@ -73,6 +89,9 @@ class TaskDependency(models.Model):
     successor = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="predecessor_links")
     type = models.CharField(max_length=2, choices=Type.choices, default=Type.FINISH_TO_START)
     lag_days = models.IntegerField(default=0)
+    # Optional strict mode: while true, the successor cannot be started (see Task.is_blocked)
+    # until this predecessor reaches 100% progress.
+    enforce_blocking = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ("predecessor", "successor")

@@ -98,6 +98,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         """Record the real start date - independent from the planned start_date,
         so a task can be marked as started before or after it was scheduled."""
         task = self.get_object()
+        if not request.data.get("force") and task.is_blocked():
+            blockers = ", ".join(t.title for t in task.blocking_predecessor_tasks())
+            return Response(
+                {"detail": f"Cette tache est bloquee par une dependance non terminee : {blockers}."},
+                status=status.HTTP_409_CONFLICT,
+            )
         raw_date = request.data.get("date")
         task.actual_start_date = date.fromisoformat(raw_date) if raw_date else date.today()
         task.save(update_fields=["actual_start_date"])

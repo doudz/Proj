@@ -56,7 +56,7 @@
             @click="notificationStore.markRead(n.id)"
           >
             <v-list-item-title class="text-wrap">
-              <strong>{{ n.actor?.first_name }}</strong> {{ n.verb }}
+              <strong v-if="n.actor">{{ n.actor.first_name }}</strong> {{ n.verb }}
             </v-list-item-title>
             <v-list-item-subtitle>{{ formatDate(n.created_at) }}</v-list-item-subtitle>
           </v-list-item>

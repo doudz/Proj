@@ -12,7 +12,7 @@ User = get_user_model()
 class TaskDependencySerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskDependency
-        fields = ["id", "predecessor", "successor", "type", "lag_days"]
+        fields = ["id", "predecessor", "successor", "type", "lag_days", "enforce_blocking"]
         read_only_fields = ["id"]
 
 
@@ -56,6 +56,8 @@ class TaskSerializer(serializers.ModelSerializer):
     subtasks_count = serializers.SerializerMethodField()
     start_variance_days = serializers.SerializerMethodField()
     end_variance_days = serializers.SerializerMethodField()
+    is_blocked = serializers.SerializerMethodField()
+    blocking_predecessor_titles = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -74,6 +76,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "actual_end_date",
             "start_variance_days",
             "end_variance_days",
+            "is_blocked",
+            "blocking_predecessor_titles",
             "is_milestone",
             "progress",
             "priority",
@@ -114,6 +118,12 @@ class TaskSerializer(serializers.ModelSerializer):
         if obj.baseline_end_date and obj.actual_end_date:
             return (obj.actual_end_date - obj.baseline_end_date).days
         return None
+
+    def get_is_blocked(self, obj):
+        return obj.is_blocked()
+
+    def get_blocking_predecessor_titles(self, obj):
+        return [t.title for t in obj.blocking_predecessor_tasks()]
 
     def create(self, validated_data):
         validated_data["created_by"] = self.context["request"].user

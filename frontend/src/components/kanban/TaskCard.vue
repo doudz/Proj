@@ -6,6 +6,12 @@
       </div>
       <div class="d-flex align-center">
         <v-icon v-if="task.is_milestone" icon="mdi-flag-checkered" size="16" class="mr-1" color="warning" />
+        <v-tooltip v-if="task.is_blocked" location="top">
+          <template #activator="{ props: tooltipProps }">
+            <v-icon v-bind="tooltipProps" icon="mdi-lock-outline" size="16" class="mr-1" color="warning" />
+          </template>
+          <span>Bloquee par : {{ task.blocking_predecessor_titles.join(", ") }}</span>
+        </v-tooltip>
         <span class="text-body-2 font-weight-medium">{{ task.title }}</span>
       </div>
       <div class="d-flex align-center mt-2">

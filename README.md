@@ -12,13 +12,23 @@
 - **Espaces de travail** (workspaces) avec roles (proprietaire, admin, membre, invite) et invitations
 - **Projets** avec colonnes Kanban personnalisables, etiquettes (labels), membres
 - **Taches** : dates de debut/echeance, avancement (%), priorite, sous-taches, pieces jointes, assignation multi-utilisateurs
-- **Dependances entre taches** (Fin->Debut, Debut->Debut, Fin->Fin, Debut->Fin)
-- **Vue Gantt** : zoom jour / semaine / mois, glisser-deposer pour replanifier, redimensionnement des barres, fleches de dependances, jalons, ligne "aujourd'hui"
+- **Dependances entre taches** (Fin->Debut, Debut->Debut, Fin->Fin, Debut->Fin), avec une option **bloquante** par dependance : la tache suivante ne peut pas etre demarree tant que la precedente n'est pas a 100% (voir ci-dessous)
+- **Ligne de base** (baseline) : figez le planning de reference et comparez-le au reel (dates de debut/fin reelles, libres par rapport aux dates planifiees, ecart en jours)
+- **Vue Gantt** : zoom jour / semaine / mois, glisser-deposer pour replanifier, redimensionnement des barres, fleches de dependances, jalons, ligne "aujourd'hui", comparaison visuelle ligne de base / reel
 - **Vue Kanban** : glisser-deposer entre colonnes
 - **Vue Liste** et **Vue Calendrier**
 - **Chat par tache** en temps reel (WebSocket) avec indicateur de saisie
-- **Notifications en temps reel** (assignation de tache, etc.)
+- **Notifications en temps reel** (assignation de tache, tache disponible) + **e-mail** lorsqu'une tache bloquee par une dependance devient disponible
 - Journal d'activite par tache
+
+### Dependances bloquantes et notification "tache disponible"
+
+Chaque dependance entre deux taches peut etre marquee comme **bloquante** (case a cocher lors de sa creation, ou icone cadenas sur la dependance existante). Quand elle l'est :
+
+- La tache suivante ne peut pas etre demarree (bouton "Demarrer aujourd'hui" desactive, action API `/tasks/{id}/start/` refusee) tant que la tache precedente n'est pas a 100% d'avancement.
+- Des qu'une tache precedente passe a 100%, chaque tache suivante bloquee par elle est reevaluee : si elle est desormais debloquee (toutes ses dependances bloquantes sont terminees) et qu'elle est toujours a l'etat initial ("a commencer", c'est-a-dire 0% et sans date de debut reelle), ses assignes recoivent une notification en temps reel **et un e-mail** les informant que la tache est disponible.
+
+Cette option est desactivee par defaut sur chaque dependance : les dependances "informatives" (sans blocage) restent possibles pour simplement visualiser un enchainement sur le Gantt sans contraindre le demarrage.
 
 ## Architecture
 
@@ -115,12 +125,13 @@ Voir `.env.example` pour la liste complete. Points d'attention en production :
 - `DJANGO_SECRET_KEY` : obligatoire, generez une valeur aleatoire longue.
 - `DJANGO_DEBUG=false` en production.
 - `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` : doivent correspondre au(x) domaine(s) reel(s) utilise(s) pour acceder a l'application (ex: `https://gantt.mondomaine.fr`).
+- `EMAIL_*` / `DEFAULT_FROM_EMAIL` / `FRONTEND_URL` : configurez un serveur SMTP pour que les notifications "tache disponible" partent reellement par e-mail. Sans configuration (par defaut en `DJANGO_DEBUG=true`), les e-mails sont simplement affiches dans les logs du conteneur `backend`.
 - Placez idealement l'application derriere un reverse proxy TLS (Caddy, Traefik, ou Nginx + certbot) devant le conteneur `frontend`.
 
 ## Limites connues / pistes d'evolution
 
 - Pas encore de taches recurrentes, de vue "charge de travail" (workload) ni d'automatisations no-code (regles) comme Monday.com.
-- Les emails transactionnels (invitations, rappels d'echeance) ne sont pas envoyes automatiquement — a completer avec un backend SMTP (`EMAIL_BACKEND`) et Celery pour les taches planifiees.
+- Seule la notification "tache disponible" (dependance bloquante terminee) declenche un e-mail pour l'instant. Les invitations et rappels d'echeance restent a completer, de meme qu'une file d'attente (Celery) pour ne pas envoyer les e-mails de maniere synchrone sous forte charge.
 - La creation de dependances se fait depuis le panneau de detail de la tache (pas encore par glisser-deposer directement sur le Gantt).
 
 ## Licence

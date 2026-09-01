@@ -106,12 +106,28 @@
           <div class="d-flex align-center mb-2">
             <span class="text-subtitle-2">Suivi reel</span>
             <v-spacer />
-            <v-btn size="x-small" variant="tonal" class="mr-1" @click="startNow">Demarrer aujourd'hui</v-btn>
+            <v-tooltip :disabled="!task.is_blocked" location="top">
+              <template #activator="{ props: tooltipProps }">
+                <span v-bind="tooltipProps">
+                  <v-btn size="x-small" variant="tonal" class="mr-1" :disabled="task.is_blocked" @click="startNow">
+                    Demarrer aujourd'hui
+                  </v-btn>
+                </span>
+              </template>
+              <span>Bloquee par : {{ task.blocking_predecessor_titles.join(", ") }}</span>
+            </v-tooltip>
             <v-btn size="x-small" variant="tonal" color="success" @click="completeNow">Terminer aujourd'hui</v-btn>
           </div>
           <p class="text-caption text-medium-emphasis mb-2">
             Les dates reelles sont libres : une tache peut demarrer ou se terminer avant ou apres les dates planifiees ci-dessus.
           </p>
+          <v-alert v-if="task.is_blocked" density="compact" variant="tonal" color="warning" class="mb-2">
+            <v-icon icon="mdi-lock-outline" size="16" class="mr-1" />
+            En attente de : {{ task.blocking_predecessor_titles.join(", ") }}
+          </v-alert>
+          <v-alert v-if="startError" density="compact" variant="tonal" color="error" class="mb-2" closable @click:close="startError = ''">
+            {{ startError }}
+          </v-alert>
           <v-row>
             <v-col cols="6">
               <v-text-field
@@ -160,27 +176,55 @@
           />
 
           <v-divider class="my-2" />
-          <div class="text-subtitle-2 mb-2">Dependances (a demarrer apres)</div>
+          <div class="text-subtitle-2 mb-1">Dependances (a demarrer apres)</div>
+          <p class="text-caption text-medium-emphasis mb-2">
+            Cliquez sur le cadenas d'une dependance pour la rendre bloquante : la tache ne pourra alors pas etre
+            demarree tant que la precedente n'est pas terminee, et ses assignes seront notifies (in-app + e-mail)
+            des qu'elle redevient disponible.
+          </p>
           <v-chip
             v-for="dep in predecessorDeps"
             :key="dep.id"
             closable
             size="small"
             class="mr-1 mb-1"
+            :color="dep.enforce_blocking ? 'warning' : undefined"
             @click:close="removeDependency(dep.id)"
           >
+            <v-icon
+              :icon="dep.enforce_blocking ? 'mdi-lock' : 'mdi-lock-open-variant-outline'"
+              size="16"
+              class="mr-1"
+              @click.stop="toggleBlocking(dep)"
+            />
             {{ taskTitle(dep.predecessor) }}
           </v-chip>
-          <v-autocomplete
-            :items="dependencyCandidates"
-            item-title="title"
-            item-value="id"
-            label="Ajouter une dependance"
-            density="compact"
-            hide-details
-            variant="outlined"
-            @update:model-value="addDependency"
-          />
+          <v-row class="align-center" no-gutters>
+            <v-col cols="8">
+              <v-autocomplete
+                v-model="pendingDependency"
+                :items="dependencyCandidates"
+                item-title="title"
+                item-value="id"
+                label="Ajouter une dependance"
+                density="compact"
+                hide-details
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="4" class="d-flex align-center pl-2">
+              <v-checkbox v-model="pendingBlocking" label="Bloquante" density="compact" hide-details />
+            </v-col>
+          </v-row>
+          <v-btn
+            size="small"
+            variant="tonal"
+            class="mt-2"
+            :disabled="!pendingDependency"
+            @click="addDependency"
+          >
+            Ajouter
+          </v-btn>
         </v-col>
         <v-col cols="5" class="border-s" style="max-height: 70vh">
           <TaskComments :task-id="task.id" />
@@ -213,6 +257,9 @@ const taskStore = useTaskStore();
 const isCreate = computed(() => props.modelValue && !props.taskId);
 const task = computed(() => (props.taskId ? taskStore.byId(Number(props.taskId)) : null));
 const newSubtask = ref("");
+const pendingDependency = ref(null);
+const pendingBlocking = ref(false);
+const startError = ref("");
 
 const priorities = [
   { title: "Basse", value: "low" },
@@ -230,6 +277,9 @@ watch(
       createForm.title = "";
       createForm.start_date = "";
       createForm.due_date = "";
+      pendingDependency.value = null;
+      pendingBlocking.value = false;
+      startError.value = "";
     }
   }
 );
@@ -270,7 +320,13 @@ async function patch(payload) {
 }
 
 async function startNow() {
-  if (task.value) await taskStore.startTask(task.value.id);
+  if (!task.value) return;
+  startError.value = "";
+  try {
+    await taskStore.startTask(task.value.id);
+  } catch (e) {
+    startError.value = e.response?.data?.detail || "Impossible de demarrer cette tache.";
+  }
 }
 
 async function completeNow() {
@@ -307,13 +363,19 @@ async function addSubtask() {
   newSubtask.value = "";
 }
 
-async function addDependency(predecessorId) {
-  if (!predecessorId || !task.value) return;
-  await taskStore.addDependency(predecessorId, task.value.id);
+async function addDependency() {
+  if (!pendingDependency.value || !task.value) return;
+  await taskStore.addDependency(pendingDependency.value, task.value.id, "FS", pendingBlocking.value);
+  pendingDependency.value = null;
+  pendingBlocking.value = false;
 }
 
 async function removeDependency(id) {
   await taskStore.removeDependency(id);
+}
+
+async function toggleBlocking(dep) {
+  await taskStore.toggleDependencyBlocking(dep.id, !dep.enforce_blocking);
 }
 
 async function remove() {

@@ -79,6 +79,7 @@
             @click="toggleCollapse(row.task.id)"
           />
           <span v-else class="gantt-leaf-spacer"></span>
+          <v-icon v-if="row.task.is_blocked" icon="mdi-lock-outline" size="14" color="warning" class="mr-1" :title="'Bloquee par : ' + row.task.blocking_predecessor_titles.join(', ')" />
           <span class="gantt-row-title" @click="$emit('open-task', row.task.id)">{{ row.task.title }}</span>
           <v-chip size="x-small" class="ml-1" variant="flat">{{ row.task.progress }}%</v-chip>
         </div>
