@@ -31,7 +31,7 @@ export const useTaskStore = defineStore("task", {
     },
     async createTask(payload) {
       const { data } = await api.post("/tasks/", payload);
-      this.tasks.push(data);
+      this._upsert(data);
       return data;
     },
     async updateTask(id, payload) {

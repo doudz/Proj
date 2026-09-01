@@ -5,7 +5,7 @@
     :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px' }"
     :title="task.title"
     @pointerdown.stop="startDrag($event, 'move')"
-    @click.stop="$emit('click')"
+    @click.stop
   ></div>
   <div
     v-else
@@ -14,7 +14,7 @@
     :style="{ left: liveX + 'px', top: y + barTop + 'px', width: liveWidth + 'px', height: barHeight + 'px', background: task.color || defaultColor }"
     :title="task.title"
     @pointerdown.stop="startDrag($event, 'move')"
-    @click.stop="$emit('click')"
+    @click.stop
   >
     <div class="gantt-bar-progress" :style="{ width: task.progress + '%' }"></div>
     <span class="gantt-bar-label">{{ task.title }}</span>

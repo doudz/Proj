@@ -27,6 +27,16 @@ export function diffDays(a, b) {
   return Math.round((end.getTime() - start.getTime()) / MS_PER_DAY);
 }
 
+/** ISO-8601 week number (1-53) for a given date. */
+export function isoWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7; // Monday = 0 ... Sunday = 6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const diff = d - firstThursday;
+  return 1 + Math.round(diff / (7 * MS_PER_DAY));
+}
+
 export const ZOOM_LEVELS = {
   day: { dayWidth: 42, headerFormat: "day" },
   week: { dayWidth: 18, headerFormat: "week" },

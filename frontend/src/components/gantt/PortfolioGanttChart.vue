@@ -109,9 +109,14 @@
                 {{ g.label }}
               </div>
             </div>
-            <div v-if="zoom !== 'month'" class="gantt-header-bottom">
+            <div v-if="zoom === 'day'" class="gantt-header-bottom">
               <div v-for="d in dayTicks" :key="d.iso" class="gantt-day-tick" :class="{ weekend: d.weekend }" :style="{ width: dayWidth + 'px' }">
                 {{ d.label }}
+              </div>
+            </div>
+            <div v-else-if="zoom === 'week'" class="gantt-header-bottom">
+              <div v-for="(g, i) in weekGroups" :key="i" class="gantt-week-group" :style="{ width: g.width + 'px' }">
+                {{ g.label }}
               </div>
             </div>
           </div>
@@ -152,7 +157,7 @@
 
 <script setup>
 import GanttBar from "@/components/gantt/GanttBar.vue";
-import { addDays, diffDays, formatDate, parseDate, ZOOM_LEVELS } from "@/components/gantt/ganttMath";
+import { addDays, diffDays, formatDate, isoWeek, parseDate, ZOOM_LEVELS } from "@/components/gantt/ganttMath";
 import { usePortfolioStore } from "@/stores/portfolio";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
@@ -327,6 +332,21 @@ const dayTicks = computed(() => {
     cursor = addDays(cursor, 1);
   }
   return ticks;
+});
+
+const weekGroups = computed(() => {
+  const groups = [];
+  let cursor = new Date(range.value.start);
+  for (let i = 0; i < totalDays.value; i++) {
+    const label = `Semaine ${isoWeek(cursor)}`;
+    if (groups.length && groups[groups.length - 1].label === label) {
+      groups[groups.length - 1].width += dayWidth.value;
+    } else {
+      groups.push({ label, width: dayWidth.value });
+    }
+    cursor = addDays(cursor, 1);
+  }
+  return groups;
 });
 
 const todayX = computed(() => {
@@ -547,6 +567,17 @@ function scrollToToday() {
 }
 .gantt-day-tick.weekend {
   background: rgba(0, 0, 0, 0.03);
+}
+.gantt-week-group {
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  white-space: nowrap;
 }
 .gantt-grid {
   position: relative;
