@@ -148,18 +148,32 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="instantiate")
     def instantiate(self, request, pk=None):
-        """Create a real project from this template, optionally re-dated."""
+        """Create a real project from this template, optionally re-dated.
+
+        Accepts at most one of `start_date` (the plan runs forward from that
+        day) or `end_date` (the plan is worked backward so its last task ends
+        on that day) - whichever the caller wants to anchor the schedule on.
+        """
         template = self.get_object()
         if not template.is_template:
             return Response({"detail": "Ce projet n'est pas un modele."}, status=status.HTTP_400_BAD_REQUEST)
         require_project_admin(request.user, template)
         name = (request.data.get("name") or template.name).strip()
         raw_start = request.data.get("start_date")
+        raw_end = request.data.get("end_date")
+        if raw_start and raw_end:
+            return Response(
+                {"detail": "Indiquez soit une date de debut, soit une date de fin, pas les deux."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             start_date = date.fromisoformat(raw_start) if raw_start else None
+            end_date = date.fromisoformat(raw_end) if raw_end else None
         except ValueError:
-            return Response({"detail": "Date de debut invalide."}, status=status.HTTP_400_BAD_REQUEST)
-        project = clone_project(template, name=name, created_by=request.user, start_date=start_date)
+            return Response({"detail": "Date invalide."}, status=status.HTTP_400_BAD_REQUEST)
+        project = clone_project(
+            template, name=name, created_by=request.user, start_date=start_date, end_date=end_date
+        )
         return Response(
             ProjectSerializer(project, context={"request": request}).data, status=status.HTTP_201_CREATED
         )

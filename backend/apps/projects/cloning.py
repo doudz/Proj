@@ -4,9 +4,15 @@ from apps.projects.models import BoardColumn, CustomField, Label, Project, Proje
 
 
 def _earliest_planned_date(tasks):
-    """The first planned date of a task set, used as the anchor when re-dating a clone."""
+    """The first planned date of a task set, used as the anchor when re-dating a clone forward from a start date."""
     dates = [d for task in tasks for d in (task.start_date, task.due_date) if d]
     return min(dates) if dates else None
+
+
+def _latest_planned_date(tasks):
+    """The last planned date of a task set, used as the anchor when re-dating a clone backward from an end date."""
+    dates = [d for task in tasks for d in (task.start_date, task.due_date) if d]
+    return max(dates) if dates else None
 
 
 def _shifted(value, delta_days):
@@ -18,7 +24,9 @@ def _shifted(value, delta_days):
 
 
 @transaction.atomic
-def clone_project(source, *, name, created_by, is_template=False, start_date=None, keep_assignees=True):
+def clone_project(
+    source, *, name, created_by, is_template=False, start_date=None, end_date=None, keep_assignees=True
+):
     """Deep-copy a project into a new one.
 
     Copies the structure (columns, labels, custom fields) and the work
@@ -27,9 +35,12 @@ def clone_project(source, *, name, created_by, is_template=False, start_date=Non
     progress, comments, attachments, activity - are deliberately not copied:
     a clone always starts as a fresh plan.
 
-    When `start_date` is given, every planned date is shifted so that the
-    earliest task of the clone starts on that day, keeping the relative
-    schedule of the whole plan intact.
+    Every planned date is shifted by the same number of days, so the whole
+    plan - including which task drives which via a dependency - keeps its
+    relative shape. The shift can be anchored from either end (pass at most
+    one): `start_date` lines up the earliest task's start on that day and
+    lets the plan run forward; `end_date` lines up the latest task's end on
+    that day and lets the plan run backward from a deadline.
     """
     from apps.tasks.models import CustomFieldValue, Task, TaskDependency
 
@@ -40,6 +51,10 @@ def clone_project(source, *, name, created_by, is_template=False, start_date=Non
         anchor = _earliest_planned_date(source_tasks) or source.start_date
         if anchor:
             delta_days = start_date - anchor
+    elif end_date:
+        anchor = _latest_planned_date(source_tasks) or source.end_date
+        if anchor:
+            delta_days = end_date - anchor
 
     project = Project.objects.create(
         workspace=source.workspace,
@@ -49,7 +64,7 @@ def clone_project(source, *, name, created_by, is_template=False, start_date=Non
         icon=source.icon,
         status=Project.Status.ACTIVE,
         start_date=_shifted(source.start_date, delta_days) or start_date,
-        end_date=_shifted(source.end_date, delta_days),
+        end_date=_shifted(source.end_date, delta_days) or end_date,
         is_template=is_template,
         created_by=created_by,
     )

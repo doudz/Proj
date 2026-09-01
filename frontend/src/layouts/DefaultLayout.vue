@@ -130,15 +130,24 @@
           clearable
           density="compact"
         />
-        <v-text-field
-          v-if="selectedTemplate"
-          v-model="templateStartDate"
-          label="Date de debut du projet"
-          type="date"
-          density="compact"
-          hint="Toutes les taches du modele sont replanifiees a partir de cette date"
-          persistent-hint
-        />
+        <template v-if="selectedTemplate">
+          <v-btn-toggle v-model="templateAnchor" mandatory density="compact" color="primary" class="mb-2">
+            <v-btn value="start" size="small">Date de debut</v-btn>
+            <v-btn value="end" size="small">Date de fin</v-btn>
+          </v-btn-toggle>
+          <v-text-field
+            v-model="templateAnchorDate"
+            :label="templateAnchor === 'start' ? 'Date de debut du projet' : 'Date de fin du projet'"
+            type="date"
+            density="compact"
+            :hint="
+              templateAnchor === 'start'
+                ? 'Toutes les taches du modele sont replanifiees a partir de cette date'
+                : 'Toutes les taches du modele sont replanifiees a rebours pour se terminer a cette date'
+            "
+            persistent-hint
+          />
+        </template>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
@@ -164,7 +173,8 @@ const newWorkspaceName = ref("");
 const newProjectDialog = ref(false);
 const newProjectName = ref("");
 const selectedTemplate = ref(null);
-const templateStartDate = ref(new Date().toISOString().slice(0, 10));
+const templateAnchor = ref("start");
+const templateAnchorDate = ref(new Date().toISOString().slice(0, 10));
 
 const authStore = useAuthStore();
 const workspaceStore = useWorkspaceStore();
@@ -214,22 +224,28 @@ const templateItems = computed(() => projectStore.templates);
 watch(newProjectDialog, async (open) => {
   if (open && workspaceStore.current) {
     selectedTemplate.value = null;
-    templateStartDate.value = new Date().toISOString().slice(0, 10);
+    templateAnchor.value = "start";
+    templateAnchorDate.value = new Date().toISOString().slice(0, 10);
     await projectStore.fetchTemplates(workspaceStore.current.id);
   }
 });
 
 async function createProject() {
   if (!newProjectName.value.trim() || !workspaceStore.current) return;
-  const project = selectedTemplate.value
-    ? await projectStore.instantiateTemplate(selectedTemplate.value, {
-        name: newProjectName.value.trim(),
-        start_date: templateStartDate.value || null,
-      })
-    : await projectStore.createProject({
-        name: newProjectName.value.trim(),
-        workspace: workspaceStore.current.id,
-      });
+  let project;
+  if (selectedTemplate.value) {
+    const payload = { name: newProjectName.value.trim() };
+    // Anchoring from the end works the plan backward from a deadline instead
+    // of forward from a kickoff date - only one of the two makes sense at a time.
+    if (templateAnchor.value === "end") payload.end_date = templateAnchorDate.value || null;
+    else payload.start_date = templateAnchorDate.value || null;
+    project = await projectStore.instantiateTemplate(selectedTemplate.value, payload);
+  } else {
+    project = await projectStore.createProject({
+      name: newProjectName.value.trim(),
+      workspace: workspaceStore.current.id,
+    });
+  }
   newProjectName.value = "";
   newProjectDialog.value = false;
   router.push({ name: "project", params: { id: project.id } });
