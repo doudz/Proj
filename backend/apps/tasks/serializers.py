@@ -7,7 +7,16 @@ from apps.accounts.serializers import UserSerializer
 from apps.projects.models import Label
 from apps.projects.permissions import can_edit_task_state, is_project_admin
 from apps.projects.serializers import LabelSerializer
-from apps.tasks.models import ActivityLog, Attachment, Comment, CustomFieldValue, Task, TaskDependency
+from apps.tasks.models import (
+    ActivityLog,
+    Attachment,
+    AttachmentComment,
+    Comment,
+    CustomFieldValue,
+    Task,
+    TaskDependency,
+    TimeEntry,
+)
 from apps.tasks.scheduling import computed_start_date, is_dependency_scheduled
 from apps.workspaces.models import ExternalContact
 from apps.workspaces.serializers import ExternalContactSerializer
@@ -31,13 +40,37 @@ class CommentSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "author", "created_at", "edited_at"]
 
 
+class AttachmentCommentSerializer(serializers.ModelSerializer):
+    author = UserSerializer(read_only=True)
+
+    class Meta:
+        model = AttachmentComment
+        fields = ["id", "attachment", "author", "body", "x_percent", "y_percent", "created_at"]
+        read_only_fields = ["id", "author", "created_at"]
+
+
 class AttachmentSerializer(serializers.ModelSerializer):
     uploaded_by = UserSerializer(read_only=True)
+    reviewed_by = UserSerializer(read_only=True)
+    is_image = serializers.BooleanField(read_only=True)
+    comments_count = serializers.IntegerField(source="comments.count", read_only=True)
 
     class Meta:
         model = Attachment
-        fields = ["id", "task", "file", "filename", "uploaded_by", "uploaded_at"]
-        read_only_fields = ["id", "uploaded_by", "uploaded_at", "filename"]
+        fields = [
+            "id",
+            "task",
+            "file",
+            "filename",
+            "uploaded_by",
+            "uploaded_at",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "is_image",
+            "comments_count",
+        ]
+        read_only_fields = ["id", "uploaded_by", "uploaded_at", "filename", "status", "reviewed_by", "reviewed_at"]
 
 
 class ActivityLogSerializer(serializers.ModelSerializer):
@@ -46,6 +79,17 @@ class ActivityLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityLog
         fields = ["id", "task", "user", "verb", "meta", "created_at"]
+
+
+class TimeEntrySerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    duration_minutes = serializers.IntegerField(read_only=True)
+    is_running = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = TimeEntry
+        fields = ["id", "task", "user", "started_at", "ended_at", "note", "duration_minutes", "is_running"]
+        read_only_fields = ["id", "user"]
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -118,6 +162,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "can_edit_full",
             "can_edit_state",
             "is_milestone",
+            "recurrence",
             "progress",
             "priority",
             "color",

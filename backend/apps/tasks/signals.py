@@ -1,36 +1,14 @@
 import logging
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models.signals import m2m_changed, post_save, pre_save
 from django.dispatch import receiver
 
-from apps.notifications.models import Notification
+from apps.notifications.services import push_notification as _push_notification
 from apps.tasks.models import Task
 
 logger = logging.getLogger(__name__)
-
-
-def _push_notification(user_id, verb, task, actor=None):
-    notification = Notification.objects.create(recipient_id=user_id, verb=verb, task=task, actor=actor)
-    layer = get_channel_layer()
-    if layer:
-        async_to_sync(layer.group_send)(
-            f"user_{user_id}",
-            {
-                "type": "notification.message",
-                "payload": {
-                    "id": notification.id,
-                    "verb": notification.verb,
-                    "task_id": task.id,
-                    "task_title": task.title,
-                    "created_at": notification.created_at.isoformat(),
-                },
-            },
-        )
-    return notification
 
 
 def _send_email(to_email, to_name, subject, body):

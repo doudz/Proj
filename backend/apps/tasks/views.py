@@ -3,26 +3,42 @@ from datetime import date
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from apps.projects.models import AutomationRule
 from apps.projects.permissions import (
     can_edit_task_state,
+    is_project_admin,
     require_comment_permission,
     require_project_admin,
     require_task_state_permission,
 )
-from apps.tasks.models import ActivityLog, Attachment, Comment, Task, TaskDependency
+from apps.tasks.automation import run_rules
+from apps.tasks.models import (
+    ActivityLog,
+    Attachment,
+    AttachmentComment,
+    Comment,
+    Task,
+    TaskDependency,
+    TimeEntry,
+)
+from apps.tasks.recurrence import spawn_next_occurrence
 from apps.tasks.scheduling import apply_schedule, reschedule_successors, would_create_cycle
 from apps.tasks.serializers import (
     ActivityLogSerializer,
+    AttachmentCommentSerializer,
     AttachmentSerializer,
     CommentSerializer,
     TaskDependencySerializer,
     TaskSerializer,
+    TimeEntrySerializer,
 )
 from apps.workspaces.permissions import user_workspace_ids
 
@@ -56,11 +72,16 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = serializer.save()
         log_activity(task, self.request.user, "a cree la tache")
         self._broadcast(task.project_id, "task.created", TaskSerializer(task).data)
+        run_rules(task, AutomationRule.Trigger.TASK_CREATED)
+        if task.progress >= 100:
+            self._on_completed(task)
 
     def perform_update(self, serializer):
         task = serializer.instance
         changed_fields = set(self.request.data.keys())
         require_task_state_permission(self.request.user, task, changed_fields)
+        was_done = task.progress >= 100
+        old_column_id = task.column_id
         task = serializer.save()
         # Dependencies own the start date, so re-snap this task and drag the
         # rest of the chain along with it.
@@ -68,6 +89,10 @@ class TaskViewSet(viewsets.ModelViewSet):
         log_activity(task, self.request.user, "a modifie la tache")
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
         self._broadcast_moved(reschedule_successors(task))
+        if task.column_id != old_column_id:
+            run_rules(task, AutomationRule.Trigger.COLUMN_CHANGED)
+        if not was_done and task.progress >= 100:
+            self._on_completed(task)
 
     def perform_destroy(self, instance):
         require_project_admin(self.request.user, instance.project)
@@ -90,12 +115,23 @@ class TaskViewSet(viewsets.ModelViewSet):
         for task in tasks:
             self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
 
+    def _on_completed(self, task):
+        """Fired once, the moment a task's progress reaches 100: runs any
+        "task terminee" automation and spawns the next occurrence if the task
+        is recurring."""
+        run_rules(task, AutomationRule.Trigger.TASK_COMPLETED)
+        clone = spawn_next_occurrence(task)
+        if clone:
+            log_activity(clone, task.created_by, "creee automatiquement (recurrence)")
+            self._broadcast(clone.project_id, "task.created", TaskSerializer(clone).data)
+
     @action(detail=True, methods=["post"], url_path="move")
     def move(self, request, pk=None):
         """Move a task to a different kanban column / position (drag & drop) -
         a status change, so members may do this on tasks assigned to them."""
         task = self.get_object()
         require_task_state_permission(request.user, task, {"column"})
+        old_column_id = task.column_id
         column_id = request.data.get("column")
         order = request.data.get("order")
         if column_id is not None:
@@ -104,6 +140,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             task.order = order
         task.save(update_fields=["column", "order"])
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        if task.column_id != old_column_id:
+            run_rules(task, AutomationRule.Trigger.COLUMN_CHANGED)
         return Response(TaskSerializer(task).data)
 
     @action(detail=True, methods=["post"], url_path="reschedule")
@@ -262,12 +300,15 @@ class TaskViewSet(viewsets.ModelViewSet):
         the planned due_date, so it can be completed before or after schedule."""
         task = self.get_object()
         require_task_state_permission(request.user, task, {"actual_end_date", "progress"})
+        was_done = task.progress >= 100
         raw_date = request.data.get("date")
         task.actual_end_date = date.fromisoformat(raw_date) if raw_date else date.today()
         task.progress = 100
         task.save(update_fields=["actual_end_date", "progress"])
         log_activity(task, request.user, "a termine la tache", {"actual_end_date": str(task.actual_end_date)})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
+        if not was_done:
+            self._on_completed(task)
         return Response(TaskSerializer(task).data)
 
 
@@ -367,3 +408,108 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         if not can_edit_task_state(self.request.user, instance.task):
             raise PermissionDenied("Vous n'avez pas la permission de supprimer cette piece jointe.")
         instance.delete()
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        return self._review(request, Attachment.Status.APPROVED)
+
+    @action(detail=True, methods=["post"], url_path="request-changes")
+    def request_changes(self, request, pk=None):
+        return self._review(request, Attachment.Status.CHANGES_REQUESTED)
+
+    def _review(self, request, new_status):
+        """Proofing decision: only a project admin signs off on a file."""
+        attachment = self.get_object()
+        require_project_admin(request.user, attachment.task.project)
+        attachment.status = new_status
+        attachment.reviewed_by = request.user
+        attachment.reviewed_at = timezone.now()
+        attachment.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+        return Response(AttachmentSerializer(attachment).data)
+
+
+class AttachmentCommentViewSet(viewsets.ModelViewSet):
+    """Remarks on an attachment, optionally pinned to a point on an image -
+    same "who may write" rule as task comments: admins and members, never
+    viewers ("consulter seulement")."""
+
+    serializer_class = AttachmentCommentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["attachment"]
+
+    def get_queryset(self):
+        return AttachmentComment.objects.filter(
+            attachment__task__project__workspace_id__in=user_workspace_ids(self.request.user)
+        ).select_related("author")
+
+    def perform_create(self, serializer):
+        attachment = serializer.validated_data["attachment"]
+        require_comment_permission(self.request.user, attachment.task.project)
+        serializer.save(author=self.request.user)
+
+    def perform_destroy(self, instance):
+        is_author = instance.author_id == self.request.user.id
+        if not is_author and not is_project_admin(self.request.user, instance.attachment.task.project):
+            raise PermissionDenied("Vous ne pouvez supprimer que vos propres commentaires.")
+        instance.delete()
+
+
+class TimeEntryViewSet(viewsets.ModelViewSet):
+    """Time tracking: a manual entry (started_at + ended_at both given) or a
+    running timer, started/stopped through the dedicated actions below.
+
+    Governed by the same "state" permission as progress/status: admins always,
+    members only on tasks they are assigned to."""
+
+    serializer_class = TimeEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["task"]
+
+    def get_queryset(self):
+        return TimeEntry.objects.filter(
+            task__project__workspace_id__in=user_workspace_ids(self.request.user)
+        ).select_related("user")
+
+    def perform_create(self, serializer):
+        task = serializer.validated_data["task"]
+        if not can_edit_task_state(self.request.user, task):
+            raise PermissionDenied("Vous n'avez pas la permission de suivre le temps sur cette tache.")
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        if not can_edit_task_state(self.request.user, serializer.instance.task):
+            raise PermissionDenied("Vous n'avez pas la permission de modifier ce suivi de temps.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        is_owner = instance.user_id == self.request.user.id
+        if not is_owner and not is_project_admin(self.request.user, instance.task.project):
+            raise PermissionDenied("Vous ne pouvez supprimer que vos propres entrees de temps.")
+        instance.delete()
+
+    @action(detail=False, methods=["post"], url_path="start")
+    def start(self, request):
+        """Start a timer on a task for the current user - one running timer
+        per (task, user) at a time."""
+        task = get_object_or_404(
+            Task, pk=request.data.get("task"), project__workspace_id__in=user_workspace_ids(request.user)
+        )
+        if not can_edit_task_state(request.user, task):
+            raise PermissionDenied("Vous n'avez pas la permission de suivre le temps sur cette tache.")
+        if TimeEntry.objects.filter(task=task, user=request.user, ended_at__isnull=True).exists():
+            return Response(
+                {"detail": "Un chronometre est deja en cours sur cette tache."}, status=status.HTTP_409_CONFLICT
+            )
+        entry = TimeEntry.objects.create(task=task, user=request.user, started_at=timezone.now())
+        return Response(TimeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="stop")
+    def stop(self, request, pk=None):
+        entry = self.get_object()
+        if entry.user_id != request.user.id:
+            raise PermissionDenied("Vous ne pouvez arreter que votre propre chronometre.")
+        if entry.ended_at:
+            return Response({"detail": "Ce chronometre est deja arrete."}, status=status.HTTP_400_BAD_REQUEST)
+        entry.ended_at = timezone.now()
+        entry.save(update_fields=["ended_at"])
+        return Response(TimeEntrySerializer(entry).data)

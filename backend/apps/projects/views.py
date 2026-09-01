@@ -9,9 +9,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from apps.projects.cloning import clone_project
-from apps.projects.models import DEFAULT_COLUMNS, BoardColumn, CustomField, Label, Project, ProjectMembership
+from apps.projects.models import (
+    DEFAULT_COLUMNS,
+    AutomationRule,
+    BoardColumn,
+    CustomField,
+    Label,
+    Project,
+    ProjectMembership,
+)
 from apps.projects.permissions import require_project_admin
 from apps.projects.serializers import (
+    AutomationRuleSerializer,
     BoardColumnSerializer,
     CustomFieldSerializer,
     LabelSerializer,
@@ -196,7 +205,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project.memberships.filter(user_id=user_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-
 class BoardColumnViewSet(viewsets.ModelViewSet):
     serializer_class = BoardColumnSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -246,6 +254,27 @@ class LabelViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Label.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
+
+    def perform_create(self, serializer):
+        require_project_admin(self.request.user, serializer.validated_data["project"])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        require_project_admin(self.request.user, serializer.instance.project)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        require_project_admin(self.request.user, instance.project)
+        instance.delete()
+
+
+class AutomationRuleViewSet(viewsets.ModelViewSet):
+    serializer_class = AutomationRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ["project"]
+
+    def get_queryset(self):
+        return AutomationRule.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
 
     def perform_create(self, serializer):
         require_project_admin(self.request.user, serializer.validated_data["project"])

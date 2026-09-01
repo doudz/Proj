@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from apps.tasks.models import ActivityLog, Attachment, Comment, CustomFieldValue, Task, TaskDependency
+from apps.tasks.models import (
+    ActivityLog,
+    Attachment,
+    AttachmentComment,
+    Comment,
+    CustomFieldValue,
+    Task,
+    TaskDependency,
+    TimeEntry,
+)
 
 
 @admin.register(Task)
@@ -25,5 +34,17 @@ class CustomFieldValueAdmin(admin.ModelAdmin):
     list_display = ["task", "field", "value"]
 
 
-admin.site.register(Attachment)
+@admin.register(TimeEntry)
+class TimeEntryAdmin(admin.ModelAdmin):
+    list_display = ["task", "user", "started_at", "ended_at", "duration_minutes"]
+    list_filter = ["user"]
+
+
+@admin.register(Attachment)
+class AttachmentAdmin(admin.ModelAdmin):
+    list_display = ["filename", "task", "status", "uploaded_by", "uploaded_at"]
+    list_filter = ["status"]
+
+
+admin.site.register(AttachmentComment)
 admin.site.register(ActivityLog)

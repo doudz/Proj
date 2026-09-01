@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from apps.projects.models import BoardColumn, CustomField, Label, Project
 
@@ -11,6 +12,12 @@ class Task(models.Model):
         MEDIUM = "medium", "Moyenne"
         HIGH = "high", "Haute"
         URGENT = "urgent", "Urgente"
+
+    class Recurrence(models.TextChoices):
+        NONE = "none", "Aucune"
+        DAILY = "daily", "Quotidienne"
+        WEEKLY = "weekly", "Hebdomadaire"
+        MONTHLY = "monthly", "Mensuelle"
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="tasks")
     column = models.ForeignKey(BoardColumn, on_delete=models.SET_NULL, null=True, related_name="tasks")
@@ -37,6 +44,9 @@ class Task(models.Model):
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
     color = models.CharField(max_length=7, blank=True)
     order = models.PositiveIntegerField(default=0)
+    # When set, completing this task (progress reaching 100) spawns the next
+    # occurrence instead of just staying done - see apps.tasks.recurrence.
+    recurrence = models.CharField(max_length=10, choices=Recurrence.choices, default=Recurrence.NONE)
 
     assignees = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="assigned_tasks", blank=True)
     # External people/subcontractors without a GanttFlow account (outsourced work).
@@ -148,16 +158,78 @@ class Comment(models.Model):
 
 
 class Attachment(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuve"
+        CHANGES_REQUESTED = "changes_requested", "A revoir"
+
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="attachments")
     file = models.FileField(upload_to="attachments/%Y/%m/")
     filename = models.CharField(max_length=255, blank=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    # Lightweight proofing workflow: an admin marks a file approved or sends it
+    # back for changes. Optional - most attachments simply stay "pending" and
+    # that is fine, it just means nobody has reviewed it yet.
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.filename and self.file:
             self.filename = self.file.name
         super().save(*args, **kwargs)
+
+    @property
+    def is_image(self):
+        return self.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"))
+
+
+class AttachmentComment(models.Model):
+    """A remark on an attachment - optionally pinned to a point on an image
+    (x_percent/y_percent, both 0-100) for in-context proofing feedback."""
+
+    attachment = models.ForeignKey(Attachment, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    body = models.TextField()
+    x_percent = models.FloatField(null=True, blank=True)
+    y_percent = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.author} on {self.attachment}: {self.body[:30]}"
+
+
+class TimeEntry(models.Model):
+    """A stretch of time someone spent on a task - either a running/stopped
+    timer (started_at set, ended_at filled in on stop) or a manually logged
+    stretch (both given up front)."""
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="time_entries")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="time_entries")
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.user} on {self.task} ({self.duration_minutes} min)"
+
+    @property
+    def duration_minutes(self):
+        end = self.ended_at or timezone.now()
+        return max(0, int((end - self.started_at).total_seconds() // 60))
+
+    @property
+    def is_running(self):
+        return self.ended_at is None
 
 
 class ActivityLog(models.Model):

@@ -28,7 +28,9 @@
             <v-btn v-bind="menuProps" icon="mdi-dots-vertical" variant="text" class="ml-1" />
           </template>
           <v-list density="compact">
+            <v-list-item prepend-icon="mdi-view-column-outline" title="Colonnes et etiquettes" @click="columnsLabelsDialog = true" />
             <v-list-item prepend-icon="mdi-form-select" title="Champs personnalises" @click="customFieldsDialog = true" />
+            <v-list-item prepend-icon="mdi-robot-outline" title="Automatisation" @click="automationDialog = true" />
             <v-list-item prepend-icon="mdi-content-save-outline" title="Enregistrer comme modele" @click="openSaveTemplate" />
             <v-list-item prepend-icon="mdi-content-copy" title="Dupliquer le projet" @click="duplicateProject" />
           </v-list>
@@ -67,6 +69,8 @@
     />
 
     <CustomFieldsDialog v-model="customFieldsDialog" :project="projectStore.current" />
+    <ColumnsLabelsDialog v-model="columnsLabelsDialog" :project="projectStore.current" />
+    <AutomationRulesDialog v-model="automationDialog" :project="projectStore.current" />
 
     <v-dialog v-model="saveTemplateDialog" max-width="460">
       <v-card title="Enregistrer comme modele">
@@ -143,6 +147,8 @@
 import CalendarView from "@/components/calendar/CalendarView.vue";
 import GanttChart from "@/components/gantt/GanttChart.vue";
 import KanbanBoard from "@/components/kanban/KanbanBoard.vue";
+import AutomationRulesDialog from "@/components/project/AutomationRulesDialog.vue";
+import ColumnsLabelsDialog from "@/components/project/ColumnsLabelsDialog.vue";
 import CustomFieldsDialog from "@/components/project/CustomFieldsDialog.vue";
 import TaskDetailDialog from "@/components/task/TaskDetailDialog.vue";
 import TaskListView from "@/components/task/TaskListView.vue";
@@ -171,6 +177,8 @@ const membersDialog = ref(false);
 const newMemberUserId = ref(null);
 const newMemberRole = ref("member");
 const customFieldsDialog = ref(false);
+const columnsLabelsDialog = ref(false);
+const automationDialog = ref(false);
 const saveTemplateDialog = ref(false);
 const templateName = ref("");
 const snackbar = ref(false);

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.projects.models import BoardColumn, CustomField, Label, Project
+from apps.projects.models import AutomationRule, BoardColumn, CustomField, Label, Project
 
 
 class BoardColumnInline(admin.TabularInline):
@@ -30,3 +30,9 @@ class CustomFieldAdmin(admin.ModelAdmin):
 @admin.register(Label)
 class LabelAdmin(admin.ModelAdmin):
     list_display = ["name", "project", "color"]
+
+
+@admin.register(AutomationRule)
+class AutomationRuleAdmin(admin.ModelAdmin):
+    list_display = ["name", "project", "trigger", "action", "enabled"]
+    list_filter = ["trigger", "action", "enabled", "project"]

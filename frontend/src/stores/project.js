@@ -7,6 +7,7 @@ export const useProjectStore = defineStore("project", {
     current: null,
     members: [],
     templates: [],
+    automationRules: [],
   }),
   actions: {
     async fetchProjects(workspaceId) {
@@ -36,17 +37,39 @@ export const useProjectStore = defineStore("project", {
       this.projects = this.projects.filter((p) => p.id !== id);
     },
     async reorderColumns(projectId, order) {
-      await api.post(`/projects/${projectId}/reorder-columns/`, { order });
+      const { data } = await api.post(`/projects/${projectId}/reorder-columns/`, { order });
+      if (this.current?.id === projectId) this.current.columns = data;
+      return data;
     },
     async createColumn(payload) {
       const { data } = await api.post("/board-columns/", payload);
       if (this.current) this.current.columns.push(data);
       return data;
     },
+    async updateColumn(id, payload) {
+      const { data } = await api.patch(`/board-columns/${id}/`, payload);
+      const idx = this.current?.columns.findIndex((c) => c.id === id) ?? -1;
+      if (idx !== -1) this.current.columns[idx] = data;
+      return data;
+    },
+    async deleteColumn(id) {
+      await api.delete(`/board-columns/${id}/`);
+      if (this.current) this.current.columns = this.current.columns.filter((c) => c.id !== id);
+    },
     async createLabel(payload) {
       const { data } = await api.post("/labels/", payload);
       if (this.current) this.current.labels.push(data);
       return data;
+    },
+    async updateLabel(id, payload) {
+      const { data } = await api.patch(`/labels/${id}/`, payload);
+      const idx = this.current?.labels.findIndex((l) => l.id === id) ?? -1;
+      if (idx !== -1) this.current.labels[idx] = data;
+      return data;
+    },
+    async deleteLabel(id) {
+      await api.delete(`/labels/${id}/`);
+      if (this.current) this.current.labels = this.current.labels.filter((l) => l.id !== id);
     },
     async setBaseline(projectId) {
       const { data } = await api.post(`/projects/${projectId}/set-baseline/`);
@@ -115,6 +138,26 @@ export const useProjectStore = defineStore("project", {
     async deleteTemplate(templateId) {
       await api.delete(`/projects/${templateId}/`);
       this.templates = this.templates.filter((t) => t.id !== templateId);
+    },
+    async fetchAutomationRules(projectId) {
+      const { data } = await api.get("/automation-rules/", { params: { project: projectId, page_size: 100 } });
+      this.automationRules = data.results ?? data;
+      return this.automationRules;
+    },
+    async createAutomationRule(payload) {
+      const { data } = await api.post("/automation-rules/", payload);
+      this.automationRules.push(data);
+      return data;
+    },
+    async updateAutomationRule(id, payload) {
+      const { data } = await api.patch(`/automation-rules/${id}/`, payload);
+      const idx = this.automationRules.findIndex((r) => r.id === id);
+      if (idx !== -1) this.automationRules[idx] = data;
+      return data;
+    },
+    async deleteAutomationRule(id) {
+      await api.delete(`/automation-rules/${id}/`);
+      this.automationRules = this.automationRules.filter((r) => r.id !== id);
     },
   },
 });

@@ -192,6 +192,24 @@
                     @change="patch({ is_milestone: task.is_milestone })"
                   />
                 </v-col>
+                <v-col cols="8">
+                  <v-select
+                    v-model="task.recurrence"
+                    :items="recurrences"
+                    label="Recurrence"
+                    density="compact"
+                    hide-details
+                    :readonly="!canEditFull"
+                    @update:model-value="(v) => patch({ recurrence: v })"
+                  />
+                </v-col>
+                <v-col v-if="task.recurrence !== 'none'" cols="12">
+                  <v-alert density="compact" variant="tonal" color="info" class="text-caption">
+                    <v-icon icon="mdi-repeat" size="14" class="mr-1" />
+                    Une fois terminee, une nouvelle occurrence sera creee automatiquement avec les dates decalees
+                    ({{ recurrenceLabel }}).
+                  </v-alert>
+                </v-col>
                 <v-col cols="12">
                   <div class="d-flex align-center">
                     <span class="text-caption mr-3">Avancement</span>
@@ -364,6 +382,9 @@
                 Ligne de base : {{ task.baseline_start_date }} &rarr; {{ task.baseline_end_date }}
                 <span v-if="varianceLabel"> - {{ varianceLabel }}</span>
               </v-alert>
+
+              <v-divider class="my-3" />
+              <TaskTimeTracking :task-id="task.id" :can-track="canEditState" :can-manage-all="canEditFull" />
             </v-window-item>
 
             <!-- ---------- LIENS ---------- -->
@@ -451,6 +472,14 @@
               <v-alert v-if="dependencyError" density="compact" variant="tonal" color="error" class="mt-2 text-caption" closable @click:close="dependencyError = ''">
                 {{ dependencyError }}
               </v-alert>
+
+              <v-divider class="my-3" />
+              <TaskAttachments
+                :task-id="task.id"
+                :can-edit="canEditState"
+                :can-review="canEditFull"
+                :can-comment="canComment"
+              />
             </v-window-item>
           </v-window>
         </v-col>
@@ -492,7 +521,9 @@
 </template>
 
 <script setup>
+import TaskAttachments from "@/components/task/TaskAttachments.vue";
 import TaskComments from "@/components/task/TaskComments.vue";
+import TaskTimeTracking from "@/components/task/TaskTimeTracking.vue";
 import { useTaskStore } from "@/stores/task";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { computed, reactive, ref, watch } from "vue";
@@ -535,6 +566,17 @@ const priorities = [
   { title: "Haute", value: "high" },
   { title: "Urgente", value: "urgent" },
 ];
+
+const recurrences = [
+  { title: "Aucune", value: "none" },
+  { title: "Quotidienne", value: "daily" },
+  { title: "Hebdomadaire", value: "weekly" },
+  { title: "Mensuelle", value: "monthly" },
+];
+
+const recurrenceLabel = computed(
+  () => recurrences.find((r) => r.value === task.value?.recurrence)?.title.toLowerCase() || ""
+);
 
 const createForm = reactive({ title: "", start_date: "", due_date: "", duration_days: null });
 

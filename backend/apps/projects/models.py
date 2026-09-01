@@ -130,6 +130,48 @@ class CustomField(models.Model):
         return f"{self.project.name} / {self.name}"
 
 
+class AutomationRule(models.Model):
+    """A "when X happens, do Y" rule scoped to a project.
+
+    Kept deliberately small (one trigger, one action) rather than a general
+    condition/action builder - chaining several simple rules together already
+    covers most real workflows, and each rule stays easy to read at a glance.
+    """
+
+    class Trigger(models.TextChoices):
+        TASK_CREATED = "task_created", "Tache creee"
+        COLUMN_CHANGED = "column_changed", "Deplacee dans une colonne"
+        TASK_COMPLETED = "task_completed", "Tache terminee (100%)"
+
+    class Action(models.TextChoices):
+        MOVE_TO_COLUMN = "move_to_column", "Deplacer vers une colonne"
+        SET_PRIORITY = "set_priority", "Changer la priorite"
+        ADD_LABEL = "add_label", "Ajouter une etiquette"
+        NOTIFY_ASSIGNEES = "notify_assignees", "Notifier les assignes"
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="automation_rules")
+    name = models.CharField(max_length=120)
+    trigger = models.CharField(max_length=20, choices=Trigger.choices)
+    # Only meaningful (and required) when trigger == COLUMN_CHANGED.
+    trigger_column = models.ForeignKey(
+        BoardColumn, on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    action_column = models.ForeignKey(
+        BoardColumn, on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    action_priority = models.CharField(max_length=10, blank=True)
+    action_label = models.ForeignKey(Label, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.project.name} / {self.name}"
+
+
 DEFAULT_COLUMNS = [
     {"name": "A faire", "color": "#90A4AE", "order": 0, "is_done_column": False},
     {"name": "En cours", "color": "#42A5F5", "order": 1, "is_done_column": False},
