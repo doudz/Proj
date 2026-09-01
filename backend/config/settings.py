@@ -135,7 +135,7 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "GanttFlow API",
-    "DESCRIPTION": "API de gestion de projet (Kanban, Gantt, Chat) - alternative libre a Monday.com / Asana",
+    "DESCRIPTION": "API de gestion de projet libre et open source (Kanban, Gantt, Chat)",
     "VERSION": "1.0.0",
 }
 

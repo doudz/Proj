@@ -1,7 +1,9 @@
 <template>
   <v-navigation-drawer v-model="drawer" width="260">
-    <v-list-item class="py-4" prepend-icon="mdi-chart-gantt" title="GanttFlow" subtitle="Gestion de projet libre" />
+    <v-list-item :to="{ name: 'myTasks' }" class="py-4" prepend-icon="mdi-chart-gantt" title="GanttFlow" subtitle="Gestion de projet libre" />
     <v-divider />
+    <v-list-item :to="{ name: 'myTasks' }" prepend-icon="mdi-view-dashboard-outline" title="Mes taches" subtitle="Ma page d'accueil" />
+    <v-divider class="my-2" />
     <v-list-item
       v-for="ws in workspaceStore.workspaces"
       :key="ws.id"
@@ -123,7 +125,7 @@ import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 const drawer = ref(true);
 const notifMenu = ref(false);
@@ -137,6 +139,7 @@ const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
 const notificationStore = useNotificationStore();
 const router = useRouter();
+const route = useRoute();
 
 onMounted(async () => {
   if (!authStore.user) await authStore.fetchMe();
@@ -150,11 +153,16 @@ onMounted(async () => {
 
 watch(
   () => workspaceStore.current,
-  async (ws) => {
-    if (ws) {
-      await projectStore.fetchProjects(ws.id);
-      await workspaceStore.fetchExternalContacts(ws.id);
+  async (ws, previous) => {
+    if (!ws) return;
+    // A project displayed for the previous workspace has no meaning once the
+    // workspace changes - fall back to the project list rather than leaving
+    // stale data on screen (only when actually switching, not on first load).
+    if (previous && route.name === "project") {
+      router.push({ name: "workspaces" });
     }
+    await projectStore.fetchProjects(ws.id);
+    await workspaceStore.fetchExternalContacts(ws.id);
   }
 );
 

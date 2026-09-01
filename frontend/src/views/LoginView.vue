@@ -6,7 +6,7 @@
           <div class="text-center mb-6">
             <v-icon icon="mdi-chart-gantt" size="48" color="primary" />
             <h1 class="text-h4 font-weight-bold mt-2">GanttFlow</h1>
-            <p class="text-medium-emphasis">L'alternative libre a Monday.com &amp; Asana</p>
+            <p class="text-medium-emphasis">Gestion de projet libre et open source</p>
           </div>
           <v-card elevation="4" class="pa-6">
             <v-form @submit.prevent="submit">

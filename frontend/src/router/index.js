@@ -18,7 +18,8 @@ const routes = [
     path: "/",
     component: () => import("@/layouts/DefaultLayout.vue"),
     children: [
-      { path: "", name: "workspaces", component: () => import("@/views/WorkspacesView.vue") },
+      { path: "", name: "myTasks", component: () => import("@/views/MyTasksView.vue") },
+      { path: "workspace", name: "workspaces", component: () => import("@/views/WorkspacesView.vue") },
       { path: "projects", name: "projects", component: () => import("@/views/ProjectsListView.vue") },
       { path: "portfolio", name: "portfolio", component: () => import("@/views/PortfolioView.vue") },
       {
@@ -44,7 +45,7 @@ router.beforeEach((to) => {
     return { name: "login", query: { redirect: to.fullPath } };
   }
   if (to.meta.public && auth.isAuthenticated) {
-    return { name: "workspaces" };
+    return { name: "myTasks" };
   }
   return true;
 });

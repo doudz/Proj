@@ -64,12 +64,22 @@ class TaskSerializer(serializers.ModelSerializer):
     end_variance_days = serializers.SerializerMethodField()
     is_blocked = serializers.SerializerMethodField()
     blocking_predecessor_titles = serializers.SerializerMethodField()
+    project_name = serializers.CharField(source="project.name", read_only=True)
+    project_color = serializers.CharField(source="project.color", read_only=True)
+    project_icon = serializers.CharField(source="project.icon", read_only=True)
+    workspace_id = serializers.IntegerField(source="project.workspace_id", read_only=True)
+    workspace_name = serializers.CharField(source="project.workspace.name", read_only=True)
 
     class Meta:
         model = Task
         fields = [
             "id",
             "project",
+            "project_name",
+            "project_color",
+            "project_icon",
+            "workspace_id",
+            "workspace_name",
             "column",
             "parent",
             "title",

@@ -29,7 +29,9 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Task.objects.filter(project__workspace_id__in=user_workspace_ids(self.request.user))
-        qs = qs.select_related("column", "project").prefetch_related("assignees", "labels", "predecessor_links")
+        qs = qs.select_related("column", "project", "project__workspace").prefetch_related(
+            "assignees", "external_assignees", "labels", "predecessor_links"
+        )
         workspace_id = self.request.query_params.get("workspace")
         if workspace_id:
             # Cross-project fetch for the portfolio Gantt - the base queryset above
@@ -97,6 +99,13 @@ class TaskViewSet(viewsets.ModelViewSet):
     def activity(self, request, pk=None):
         task = self.get_object()
         return Response(ActivityLogSerializer(task.activity.all()[:50], many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="mine")
+    def mine(self, request):
+        """Every task assigned to the current user, across all of their workspaces -
+        powers the personal "my tasks" home page."""
+        qs = self.get_queryset().filter(assignees=request.user).order_by("due_date", "order")
+        return Response(TaskSerializer(qs, many=True).data)
 
     @action(detail=True, methods=["post"], url_path="start")
     def start(self, request, pk=None):

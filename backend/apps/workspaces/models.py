@@ -5,7 +5,7 @@ from django.db import models
 
 
 class Workspace(models.Model):
-    """Top level container, equivalent to a Monday.com 'account' / Asana 'organization'."""
+    """Top level container grouping projects and members - an organization or team account."""
 
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140, unique=True)

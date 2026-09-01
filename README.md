@@ -1,6 +1,6 @@
 # GanttFlow
 
-**GanttFlow** est une alternative libre et open source (multi-utilisateur, auto-hebergeable) a Monday.com et Asana, centree sur la planification de projet : tableau Kanban, **vue Gantt interactive** (glisser-deposer, dependances, jalons), liste, calendrier, et **chat/commentaires en temps reel** par tache.
+**GanttFlow** est un outil de gestion de projet libre et open source (multi-utilisateur, auto-hebergeable), centre sur la planification de projet : tableau Kanban, **vue Gantt interactive** (glisser-deposer, dependances, jalons), liste, calendrier, et **chat/commentaires en temps reel** par tache.
 
 - **Backend** : Python / Django + Django REST Framework + Django Channels (WebSocket) + PostgreSQL + Redis
 - **Frontend** : Vue 3 + Vuetify 3 + Pinia + Vite
@@ -220,7 +220,7 @@ Voir `.env.example` pour la liste complete. Points d'attention en production :
 
 ## Limites connues / pistes d'evolution
 
-- Pas encore de taches recurrentes, de vue "charge de travail" (workload) ni d'automatisations no-code (regles) comme Monday.com.
+- Pas encore de taches recurrentes, de vue "charge de travail" (workload) ni d'automatisations no-code (regles).
 - Les e-mails sont envoyes pour : l'assignation d'un contact externe, et la notification "tache disponible" (dependance bloquante terminee) pour les membres comme pour les contacts externes. Les membres internes ne recoivent en revanche pas d'e-mail a l'assignation (notification in-app + temps reel uniquement). Les invitations et rappels d'echeance par e-mail restent a completer, de meme qu'une file d'attente (Celery) pour ne pas envoyer les e-mails de maniere synchrone sous forte charge.
 - La creation de dependances se fait depuis le panneau de detail de la tache (pas encore par glisser-deposer directement sur le Gantt).
 
