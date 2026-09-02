@@ -216,6 +216,7 @@ Voir `.env.example` pour la liste complete. Points d'attention en production :
 - `DJANGO_DEBUG=false` en production.
 - `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` : doivent correspondre au(x) domaine(s) reel(s) utilise(s) pour acceder a l'application (ex: `https://gantt.mondomaine.fr`).
 - `EMAIL_*` / `DEFAULT_FROM_EMAIL` / `FRONTEND_URL` : configurez un serveur SMTP pour que les notifications "tache disponible" partent reellement par e-mail. Sans configuration (par defaut en `DJANGO_DEBUG=true`), les e-mails sont simplement affiches dans les logs du conteneur `backend`.
+- `LDAP_ENABLED` / `LDAP_*` : authentification LDAP / Active Directory optionnelle (desactivee par defaut). Une fois activee, les utilisateurs continuent de se connecter avec leur e-mail, mais le mot de passe est verifie aupres de l'annuaire d'entreprise ; le compte super-utilisateur (`DJANGO_SUPERUSER_EMAIL`) continue de s'authentifier localement dans tous les cas. Voir `.env.example` pour le detail des variables (serveur, compte de service, base/filtre de recherche, groupe requis...).
 - Placez idealement l'application derriere un reverse proxy TLS (Caddy, Traefik, ou Nginx + certbot) devant le conteneur `frontend`.
 
 ## Limites connues / pistes d'evolution

@@ -182,3 +182,54 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "GanttFlow <noreply@ga
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost")
 
 LOGIN_URL = "/admin/login/"
+
+# ---------------------------------------------------------------------------
+# Authentification LDAP / Active Directory (optionnelle, desactivee par
+# defaut). Les comptes syncronises localement (ex: super-utilisateur cree par
+# entrypoint.sh) continuent de s'authentifier via ModelBackend en priorite ;
+# LDAP prend le relais pour toute autre adresse e-mail.
+# ---------------------------------------------------------------------------
+LDAP_ENABLED = os.environ.get("LDAP_ENABLED", "false").lower() == "true"
+
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
+
+if LDAP_ENABLED:
+    import ldap
+    from django_auth_ldap.config import GroupOfNamesType, LDAPSearch
+
+    AUTH_LDAP_SERVER_URI = os.environ.get("LDAP_SERVER_URI", "ldap://ldap.example.com")
+    AUTH_LDAP_BIND_DN = os.environ.get("LDAP_BIND_DN", "")
+    AUTH_LDAP_BIND_PASSWORD = os.environ.get("LDAP_BIND_PASSWORD", "")
+
+    # Recherche l'utilisateur par son e-mail (meme champ que le formulaire de
+    # connexion) : %(user)s recoit la valeur passee a authenticate().
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        os.environ.get("LDAP_USER_SEARCH_BASE", "ou=users,dc=example,dc=com"),
+        ldap.SCOPE_SUBTREE,
+        os.environ.get("LDAP_USER_SEARCH_FILTER", "(mail=%(user)s)"),
+    )
+
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "first_name": os.environ.get("LDAP_ATTR_FIRST_NAME", "givenName"),
+        "last_name": os.environ.get("LDAP_ATTR_LAST_NAME", "sn"),
+        "email": os.environ.get("LDAP_ATTR_EMAIL", "mail"),
+    }
+
+    # Recree/met a jour le compte Django local a chaque connexion, avec un
+    # mot de passe local inutilisable (le mot de passe reste dans l'annuaire).
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True
+    AUTH_LDAP_START_TLS = os.environ.get("LDAP_START_TLS", "false").lower() == "true"
+    AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
+
+    # Restreint la connexion aux membres d'un groupe LDAP donne (optionnel).
+    _ldap_require_group = os.environ.get("LDAP_REQUIRE_GROUP_DN", "").strip()
+    if _ldap_require_group:
+        AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+            os.environ.get("LDAP_GROUP_SEARCH_BASE", "ou=groups,dc=example,dc=com"),
+            ldap.SCOPE_SUBTREE,
+            "(objectClass=groupOfNames)",
+        )
+        AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
+        AUTH_LDAP_REQUIRE_GROUP = _ldap_require_group
+
+    AUTHENTICATION_BACKENDS.append("apps.accounts.ldap_backend.EmailLDAPBackend")
