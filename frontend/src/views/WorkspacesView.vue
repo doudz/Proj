@@ -48,18 +48,60 @@
       </v-row>
     </template>
 
-    <v-dialog v-model="membersDialog" max-width="480">
+    <v-dialog v-model="membersDialog" max-width="520">
       <v-card title="Membres de l'espace de travail">
+        <v-card-subtitle v-if="isWorkspaceAdmin" class="px-4">
+          Tous les comptes de l'entreprise sont selectionnables ci-dessous - inutile d'inviter quelqu'un qui a deja
+          un compte.
+        </v-card-subtitle>
         <v-card-text>
           <v-list>
-            <v-list-item v-for="m in workspaceStore.members" :key="m.id" :title="m.user.first_name + ' ' + m.user.last_name" :subtitle="m.role">
+            <v-list-item v-for="m in workspaceStore.members" :key="m.id" :title="m.user.first_name + ' ' + m.user.last_name">
               <template #prepend>
                 <v-avatar :color="m.user.avatar_color">{{ m.user.initials }}</v-avatar>
               </template>
+              <template #append>
+                <template v-if="isWorkspaceAdmin && m.role !== 'owner'">
+                  <v-select
+                    :model-value="m.role"
+                    :items="roleOptions"
+                    density="compact"
+                    hide-details
+                    variant="outlined"
+                    style="max-width: 150px"
+                    @update:model-value="(v) => changeRole(m, v)"
+                  />
+                  <v-btn icon="mdi-close" variant="text" size="small" class="ml-1" @click="removeMember(m)" />
+                </template>
+                <v-chip v-else size="small">{{ roleLabel(m.role) }}</v-chip>
+              </template>
             </v-list-item>
           </v-list>
-          <v-divider class="my-3" />
-          <v-text-field v-model="inviteEmail" label="Inviter par e-mail" append-inner-icon="mdi-send" @click:append-inner="invite" @keyup.enter="invite" />
+
+          <template v-if="isWorkspaceAdmin">
+            <v-divider class="my-3" />
+            <div class="text-subtitle-2 mb-2">Ajouter depuis l'annuaire de l'entreprise</div>
+            <v-select
+              v-model="newMemberUserId"
+              :items="addableUsers"
+              item-title="label"
+              item-value="id"
+              label="Personne"
+              density="compact"
+            />
+            <v-select v-model="newMemberRole" :items="roleOptions" label="Role" density="compact" />
+            <v-btn color="primary" :disabled="!newMemberUserId" @click="addMember">Ajouter</v-btn>
+
+            <v-divider class="my-3" />
+            <v-text-field
+              v-model="inviteEmail"
+              label="Ou inviter par e-mail (sans compte existant)"
+              append-inner-icon="mdi-send"
+              density="compact"
+              @click:append-inner="invite"
+              @keyup.enter="invite"
+            />
+          </template>
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -110,13 +152,15 @@
 </template>
 
 <script setup>
+import { useDirectoryStore } from "@/stores/directory";
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
+const directoryStore = useDirectoryStore();
 const router = useRouter();
 
 const membersDialog = ref(false);
@@ -125,6 +169,30 @@ const contactsDialog = ref(false);
 const newContact = reactive({ name: "", email: "", company: "" });
 const newProjectDialog = ref(false);
 const newProjectName = ref("");
+const newMemberUserId = ref(null);
+const newMemberRole = ref("member");
+
+const isWorkspaceAdmin = computed(() =>
+  ["owner", "admin"].includes(workspaceStore.current?.my_role)
+);
+
+const roleOptions = [
+  { title: "Administrateur", value: "admin" },
+  { title: "Membre", value: "member" },
+  { title: "Invite", value: "guest" },
+];
+
+function roleLabel(value) {
+  if (value === "owner") return "Proprietaire";
+  return roleOptions.find((r) => r.value === value)?.title || value;
+}
+
+const addableUsers = computed(() => {
+  const existingIds = new Set(workspaceStore.members.map((m) => m.user.id));
+  return directoryStore.users
+    .filter((u) => !existingIds.has(u.id))
+    .map((u) => ({ id: u.id, label: `${u.first_name} ${u.last_name} (${u.email})` }));
+});
 
 onMounted(async () => {
   if (workspaceStore.current) {
@@ -133,8 +201,32 @@ onMounted(async () => {
 });
 
 watch(membersDialog, async (open) => {
-  if (open && workspaceStore.current) await workspaceStore.fetchMembers(workspaceStore.current.id);
+  if (open && workspaceStore.current) {
+    newMemberUserId.value = null;
+    newMemberRole.value = "member";
+    await Promise.all([workspaceStore.fetchMembers(workspaceStore.current.id), directoryStore.fetchUsers()]);
+  }
 });
+
+async function changeRole(membership, role) {
+  await workspaceStore.addMember(workspaceStore.current.id, { user_id: membership.user.id, role });
+}
+
+async function removeMember(membership) {
+  if (confirm(`Retirer ${membership.user.first_name} ${membership.user.last_name} de l'espace de travail ?`)) {
+    await workspaceStore.removeMember(workspaceStore.current.id, membership.user.id);
+  }
+}
+
+async function addMember() {
+  if (!newMemberUserId.value) return;
+  await workspaceStore.addMember(workspaceStore.current.id, {
+    user_id: newMemberUserId.value,
+    role: newMemberRole.value,
+  });
+  newMemberUserId.value = null;
+  newMemberRole.value = "member";
+}
 
 watch(contactsDialog, async (open) => {
   if (open && workspaceStore.current) await workspaceStore.fetchExternalContacts(workspaceStore.current.id);

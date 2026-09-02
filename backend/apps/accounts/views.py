@@ -1,9 +1,12 @@
-from rest_framework import generics, permissions
+from django.contrib.auth import get_user_model
+from rest_framework import generics, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.accounts.serializers import RegisterSerializer, UserSerializer
+
+User = get_user_model()
 
 
 class EmailTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -47,3 +50,15 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class UserViewSet(viewsets.ReadOnlyModelViewSet):
+    """Company-wide user directory - this is a single-tenant, enterprise
+    deployment, so any signed-in user may browse the full list of accounts to
+    add colleagues to a workspace or project, regardless of which workspaces
+    they currently share."""
+
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = User.objects.filter(is_active=True).order_by("first_name", "last_name")
+    search_fields = ["first_name", "last_name", "email"]

@@ -21,9 +21,30 @@ class WorkspaceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Workspace.objects.filter(id__in=user_workspace_ids(self.request.user)).distinct()
 
-    @action(detail=True, methods=["get"], url_path="members")
+    @action(detail=True, methods=["get", "post"], url_path="members")
     def members(self, request, pk=None):
         workspace = self.get_object()
+        if request.method == "POST":
+            # Single-tenant, enterprise deployment: anyone with an account
+            # already belongs to the company, so an admin adds them straight
+            # from the directory - no e-mail/accept round-trip required (that
+            # flow still exists via `invite`, for someone without an account yet).
+            my_membership = workspace.memberships.filter(user=request.user).first()
+            if not my_membership or my_membership.role not in (Membership.Role.OWNER, Membership.Role.ADMIN):
+                return Response({"detail": "Permission refusee."}, status=status.HTTP_403_FORBIDDEN)
+            user_id = request.data.get("user_id")
+            role = request.data.get("role", Membership.Role.MEMBER)
+            if role not in Membership.Role.values:
+                return Response({"detail": "Role invalide."}, status=status.HTTP_400_BAD_REQUEST)
+            if role == Membership.Role.OWNER:
+                return Response(
+                    {"detail": "Le role proprietaire ne peut pas etre attribue ici."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            membership, _ = Membership.objects.update_or_create(
+                workspace=workspace, user_id=user_id, defaults={"role": role}
+            )
+            return Response(MembershipSerializer(membership).data, status=status.HTTP_201_CREATED)
         memberships = workspace.memberships.select_related("user")
         return Response(MembershipSerializer(memberships, many=True).data)
 

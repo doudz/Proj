@@ -153,10 +153,10 @@ import CustomFieldsDialog from "@/components/project/CustomFieldsDialog.vue";
 import TaskDetailDialog from "@/components/task/TaskDetailDialog.vue";
 import TaskListView from "@/components/task/TaskListView.vue";
 import { connectSocket } from "@/services/ws";
+import { useDirectoryStore } from "@/stores/directory";
 import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useTaskStore } from "@/stores/task";
-import { useWorkspaceStore } from "@/stores/workspace";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -165,7 +165,7 @@ const props = defineProps({ id: { type: [String, Number], required: true } });
 const projectStore = useProjectStore();
 const taskStore = useTaskStore();
 const notificationStore = useNotificationStore();
-const workspaceStore = useWorkspaceStore();
+const directoryStore = useDirectoryStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -198,10 +198,12 @@ function roleLabel(value) {
 }
 
 const addableWorkspaceMembers = computed(() => {
+  // The whole company directory, not just people already in this workspace -
+  // adding someone here folds them into the workspace automatically (backend).
   const existingUserIds = new Set(projectStore.members.map((m) => m.user.id));
-  return workspaceStore.members
-    .filter((m) => !existingUserIds.has(m.user.id))
-    .map((m) => ({ id: m.user.id, label: `${m.user.first_name} ${m.user.last_name}` }));
+  return directoryStore.users
+    .filter((u) => !existingUserIds.has(u.id))
+    .map((u) => ({ id: u.id, label: `${u.first_name} ${u.last_name} (${u.email})` }));
 });
 
 watch(membersDialog, async (open) => {
@@ -210,7 +212,7 @@ watch(membersDialog, async (open) => {
     newMemberRole.value = "member";
     await Promise.all([
       projectStore.fetchMembers(projectStore.current.id),
-      workspaceStore.fetchMembers(projectStore.current.workspace),
+      directoryStore.fetchUsers(),
     ]);
   }
 });

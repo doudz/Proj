@@ -126,11 +126,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             role = request.data.get("role", ProjectMembership.Role.MEMBER)
             if role not in ProjectMembership.Role.values:
                 return Response({"detail": "Role invalide."}, status=status.HTTP_400_BAD_REQUEST)
-            if not Membership.objects.filter(workspace_id=project.workspace_id, user_id=user_id).exists():
-                return Response(
-                    {"detail": "Cette personne doit d'abord etre membre de l'espace de travail."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            # Anyone in the company directory can be added straight to a
+            # project; if they are not already in the workspace, being put on
+            # one of its projects is reason enough to fold them in as a
+            # regular workspace member.
+            Membership.objects.get_or_create(
+                workspace_id=project.workspace_id, user_id=user_id, defaults={"role": Membership.Role.MEMBER}
+            )
             membership, _ = ProjectMembership.objects.update_or_create(
                 project=project, user_id=user_id, defaults={"role": role}
             )

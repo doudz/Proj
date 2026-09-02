@@ -36,6 +36,17 @@ export const useWorkspaceStore = defineStore("workspace", {
       const { data } = await api.post(`/workspaces/${workspaceId}/invite/`, payload);
       return data;
     },
+    async addMember(workspaceId, payload) {
+      const { data } = await api.post(`/workspaces/${workspaceId}/members/`, payload);
+      const idx = this.members.findIndex((m) => m.user.id === data.user.id);
+      if (idx !== -1) this.members[idx] = data;
+      else this.members.push(data);
+      return data;
+    },
+    async removeMember(workspaceId, userId) {
+      await api.delete(`/workspaces/${workspaceId}/members/${userId}/`);
+      this.members = this.members.filter((m) => m.user.id !== userId);
+    },
     async fetchExternalContacts(workspaceId) {
       const { data } = await api.get("/external-contacts/", { params: { workspace: workspaceId, page_size: 500 } });
       this.externalContacts = data.results ?? data;
