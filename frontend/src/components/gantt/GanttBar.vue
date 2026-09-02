@@ -3,7 +3,7 @@
     v-if="task.is_milestone"
     class="gantt-milestone"
     :class="{ 'not-draggable': !canDrag }"
-    :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px' }"
+    :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px', background: task.color || undefined }"
     :title="task.title"
     @pointerdown.stop="canDrag && startDrag($event, 'move')"
     @click.stop="!canDrag && $emit('click')"

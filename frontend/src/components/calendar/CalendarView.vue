@@ -26,6 +26,7 @@
             label
             @click="$emit('open-task', task.id)"
           >
+            <span v-if="task.color" class="task-color-dot" :style="{ backgroundColor: task.color }"></span>
             {{ task.title }}
           </v-chip>
         </div>
@@ -127,5 +128,13 @@ function shiftMonth(delta) {
 .calendar-tasks {
   display: flex;
   flex-direction: column;
+}
+.task-color-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+  flex: none;
 }
 </style>

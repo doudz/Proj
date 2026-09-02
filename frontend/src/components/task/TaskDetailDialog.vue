@@ -203,6 +203,19 @@
                     @update:model-value="(v) => patch({ recurrence: v })"
                   />
                 </v-col>
+                <v-col cols="12" class="d-flex align-center">
+                  <span class="text-caption text-medium-emphasis mr-2">Couleur</span>
+                  <input
+                    type="color"
+                    :value="task.color || DEFAULT_TASK_COLOR"
+                    class="color-swatch mr-2"
+                    :disabled="!canEditFull"
+                    @change="(e) => patch({ color: e.target.value })"
+                  />
+                  <v-btn v-if="task.color && canEditFull" size="x-small" variant="text" @click="patch({ color: '' })">
+                    Reinitialiser
+                  </v-btn>
+                </v-col>
                 <v-col v-if="task.recurrence !== 'none'" cols="12">
                   <v-alert density="compact" variant="tonal" color="info" class="text-caption">
                     <v-icon icon="mdi-repeat" size="14" class="mr-1" />
@@ -574,6 +587,8 @@ const recurrences = [
   { title: "Mensuelle", value: "monthly" },
 ];
 
+const DEFAULT_TASK_COLOR = "#42A5F5";
+
 const recurrenceLabel = computed(
   () => recurrences.find((r) => r.value === task.value?.recurrence)?.title.toLowerCase() || ""
 );
@@ -807,5 +822,14 @@ function formatDate(value) {
 .bounded-list {
   max-height: 150px;
   overflow-y: auto;
+}
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: none;
 }
 </style>

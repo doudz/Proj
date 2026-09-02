@@ -7,8 +7,9 @@
     @click:row="(_, { item }) => $emit('open-task', item.id)"
   >
     <template #item.title="{ item }">
-      <span :style="{ paddingLeft: item.parent ? '24px' : '0' }">
+      <span class="d-flex align-center" :style="{ paddingLeft: item.parent ? '24px' : '0' }">
         <v-icon v-if="item.parent" icon="mdi-subdirectory-arrow-right" size="14" class="mr-1" />
+        <span v-if="item.color" class="task-color-dot" :style="{ backgroundColor: item.color }"></span>
         {{ item.title }}
       </span>
     </template>
@@ -108,5 +109,13 @@ function columnColor(id) {
 <style scoped>
 .external-avatar {
   border: 2px dashed white;
+}
+.task-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+  flex: none;
 }
 </style>

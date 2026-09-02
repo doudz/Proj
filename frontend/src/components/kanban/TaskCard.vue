@@ -1,5 +1,10 @@
 <template>
-  <v-card class="mb-2 task-card" elevation="1" @click="$emit('click')">
+  <v-card
+    class="mb-2 task-card"
+    elevation="1"
+    :style="{ borderLeft: '4px solid ' + (task.color || 'transparent') }"
+    @click="$emit('click')"
+  >
     <v-card-text class="pb-2">
       <div class="d-flex flex-wrap ga-1 mb-1">
         <v-chip v-for="l in task.labels" :key="l.id" size="x-small" :color="l.color" label>{{ l.name }}</v-chip>
