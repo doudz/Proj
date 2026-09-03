@@ -132,6 +132,15 @@
             ></div>
             <div v-if="todayX !== null" class="gantt-today-line" :style="{ left: todayX + 'px' }"></div>
 
+            <svg class="gantt-links" :width="totalWidth" :height="rows.length * rowHeight">
+              <defs>
+                <marker id="portfolio-gantt-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L6,3 z" fill="#90a4ae" />
+                </marker>
+              </defs>
+              <path v-for="link in links" :key="link.id" :d="link.path" class="gantt-link-path" />
+            </svg>
+
             <template v-for="(row, index) in rows" :key="row.key">
               <div v-if="row.isGroupHeader" class="gantt-group-band" :style="{ top: index * rowHeight + 'px', height: rowHeight + 'px' }"></div>
               <GanttBar
@@ -453,6 +462,46 @@ const rows = computed(() => {
   return out;
 });
 
+// A task can appear on several rows at once (grouped by assignee or by label,
+// one occurrence per group) - so each task id maps to every row it shows on,
+// and a dependency draws one link per matching predecessor/successor pair.
+const rowIndexByTask = computed(() => {
+  const map = new Map();
+  rows.value.forEach((row, index) => {
+    if (row.isGroupHeader) return;
+    if (!map.has(row.task.id)) map.set(row.task.id, []);
+    map.get(row.task.id).push(index);
+  });
+  return map;
+});
+
+const links = computed(() => {
+  const paths = [];
+  for (const dep of portfolioStore.dependencies) {
+    const predIndexes = rowIndexByTask.value.get(dep.predecessor) || [];
+    const succIndexes = rowIndexByTask.value.get(dep.successor) || [];
+    for (const predIdx of predIndexes) {
+      const predBar = rows.value[predIdx].bar;
+      if (!predBar) continue;
+      for (const succIdx of succIndexes) {
+        const succBar = rows.value[succIdx].bar;
+        if (!succBar) continue;
+        const x1 = predBar.x + predBar.width;
+        const y1 = predIdx * rowHeight + rowHeight / 2;
+        const x2 = succBar.x;
+        const y2 = succIdx * rowHeight + rowHeight / 2;
+        const midX = x1 + Math.max(16, (x2 - x1) / 2);
+        const path =
+          x2 >= x1 + 8
+            ? `M ${x1} ${y1} H ${midX} V ${y2} H ${x2}`
+            : `M ${x1} ${y1} H ${x1 + 16} V ${y1 + rowHeight / 2} H ${x2 - 16} V ${y2} H ${x2}`;
+        paths.push({ id: `${dep.id}-${predIdx}-${succIdx}`, path });
+      }
+    }
+  }
+  return paths;
+});
+
 function onReschedule(task, { startDeltaDays, endDeltaDays }) {
   const start = task.start_date ? formatDate(addDays(parseDate(task.start_date), startDeltaDays)) : null;
   const due = task.due_date ? formatDate(addDays(parseDate(task.due_date), endDeltaDays)) : null;
@@ -598,6 +647,18 @@ function scrollToToday() {
   width: 2px;
   background: #ef5350;
   z-index: 1;
+}
+.gantt-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.gantt-link-path {
+  fill: none;
+  stroke: #90a4ae;
+  stroke-width: 1.5;
+  marker-end: url(#portfolio-gantt-arrow);
 }
 .gantt-group-band {
   position: absolute;
