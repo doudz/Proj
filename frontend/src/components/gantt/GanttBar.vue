@@ -6,7 +6,7 @@
     :style="{ left: x + dayWidth / 2 - 8 + 'px', top: y + barTop + barHeight / 2 - 8 + 'px', background: task.color || undefined }"
     :title="task.title"
     @pointerdown.stop="canDrag && startDrag($event, 'move')"
-    @click.stop="!canDrag && $emit('click')"
+    @dblclick.stop="$emit('click')"
   ></div>
   <div
     v-else
@@ -15,7 +15,7 @@
     :style="{ left: liveX + 'px', top: y + barTop + 'px', width: liveWidth + 'px', height: barHeight + 'px', background: task.color || defaultColor }"
     :title="barTitle"
     @pointerdown.stop="canMove && startDrag($event, 'move')"
-    @click.stop="!canMove && $emit('click')"
+    @dblclick.stop="$emit('click')"
   >
     <div class="gantt-bar-progress" :style="{ width: task.progress + '%' }"></div>
     <v-icon v-if="task.is_start_locked" icon="mdi-lock" size="11" class="gantt-bar-lock" />
@@ -97,8 +97,6 @@ function onUp() {
     } else if (mode.value === "resize-start") {
       emit("reschedule", { startDeltaDays: deltaDays, endDeltaDays: 0 });
     }
-  } else if (mode.value === "move") {
-    emit("click");
   }
   offsetX.value = 0;
   offsetWidth.value = 0;

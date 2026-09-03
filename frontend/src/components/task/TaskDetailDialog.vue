@@ -56,6 +56,17 @@
         <v-chip v-if="task.is_blocked" size="small" color="warning" class="mr-2" prepend-icon="mdi-lock-outline">
           Bloquee
         </v-chip>
+        <v-btn
+          v-if="canEditFull || canEditState"
+          color="primary"
+          variant="tonal"
+          size="small"
+          prepend-icon="mdi-content-save-outline"
+          class="mr-2"
+          @click="save"
+        >
+          Enregistrer
+        </v-btn>
         <v-btn icon="mdi-close" variant="text" density="comfortable" @click="close" />
       </div>
       <v-divider />
@@ -531,6 +542,8 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <v-snackbar v-model="saveSnackbar" :timeout="2000" color="success">Modifications enregistrees.</v-snackbar>
 </template>
 
 <script setup>
@@ -539,7 +552,7 @@ import TaskComments from "@/components/task/TaskComments.vue";
 import TaskTimeTracking from "@/components/task/TaskTimeTracking.vue";
 import { useTaskStore } from "@/stores/task";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -562,6 +575,7 @@ const patchError = ref("");
 const dependencyError = ref("");
 const quickContactDialog = ref(false);
 const quickContact = reactive({ name: "", email: "", company: "" });
+const saveSnackbar = ref(false);
 
 const canEditFull = computed(() => task.value?.can_edit_full ?? false);
 const canEditState = computed(() => task.value?.can_edit_state ?? false);
@@ -700,6 +714,15 @@ async function patch(payload) {
     await taskStore.refreshTask(task.value.id);
     durationDraft.value = task.value?.duration_days ?? null;
   }
+}
+
+async function save() {
+  // Every field already saves itself on change (blur/select) - this button mainly
+  // exists so users have something to click instead of the chat's send button.
+  // Blurring flushes a title/description edit still sitting in a focused field.
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  await nextTick();
+  saveSnackbar.value = true;
 }
 
 async function saveCustom(field, value) {

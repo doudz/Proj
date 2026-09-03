@@ -142,7 +142,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
         if task.column_id != old_column_id:
             run_rules(task, AutomationRule.Trigger.COLUMN_CHANGED)
-        return Response(TaskSerializer(task).data)
+        return Response(TaskSerializer(task, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="reschedule")
     def reschedule(self, request, pk=None):
@@ -163,7 +163,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         log_activity(task, request.user, "a replanifie la tache", {"start_date": start_date, "due_date": due_date})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
         self._broadcast_moved(reschedule_successors(task))
-        return Response(TaskSerializer(task).data)
+        return Response(TaskSerializer(task, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="activity")
     def activity(self, request, pk=None):
@@ -292,7 +292,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         task.save(update_fields=["actual_start_date"])
         log_activity(task, request.user, "a demarre la tache", {"actual_start_date": str(task.actual_start_date)})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
-        return Response(TaskSerializer(task).data)
+        return Response(TaskSerializer(task, context={"request": request}).data)
 
     @action(detail=True, methods=["post"], url_path="complete")
     def complete(self, request, pk=None):
@@ -309,7 +309,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
         if not was_done:
             self._on_completed(task)
-        return Response(TaskSerializer(task).data)
+        return Response(TaskSerializer(task, context={"request": request}).data)
 
 
 class TaskDependencyViewSet(viewsets.ModelViewSet):
