@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from apps.projects.models import BoardColumn, CustomField, Label, Project, ProjectMembership
+from apps.projects.models import BoardColumn, CustomField, Label, Project, ProjectCustomFieldValue, ProjectMembership
 
 
 def _earliest_planned_date(tasks):
@@ -25,7 +25,15 @@ def _shifted(value, delta_days):
 
 @transaction.atomic
 def clone_project(
-    source, *, name, created_by, is_template=False, start_date=None, end_date=None, keep_assignees=True
+    source,
+    *,
+    name,
+    created_by,
+    is_template=False,
+    start_date=None,
+    end_date=None,
+    keep_assignees=True,
+    reset=False,
 ):
     """Deep-copy a project into a new one.
 
@@ -34,6 +42,14 @@ def clone_project(
     dependencies). Progress and history - baseline dates, actual dates,
     progress, comments, attachments, activity - are deliberately not copied:
     a clone always starts as a fresh plan.
+
+    When `reset` is true, the clone starts as a blank slate on top of that:
+    the project status is "planned" (draft) rather than mirroring the
+    source, every task lands on the project's first column instead of
+    keeping its source column, and no custom field value (task-level or
+    project-level) is copied over. When false (the default), the plan's
+    current column per task and its custom field values follow along, and
+    the project status matches the source.
 
     Every planned date is shifted by the same number of days, so the whole
     plan - including which task drives which via a dependency - keeps its
@@ -62,7 +78,7 @@ def clone_project(
         description=source.description,
         color=source.color,
         icon=source.icon,
-        status=Project.Status.ACTIVE,
+        status=Project.Status.PLANNED if reset else source.status,
         start_date=_shifted(source.start_date, delta_days) or start_date,
         end_date=_shifted(source.end_date, delta_days) or end_date,
         is_template=is_template,
@@ -80,6 +96,9 @@ def clone_project(
             is_done_column=column.is_done_column,
         )
         column_map[column.id] = clone
+    # The column every task lands on when resetting - the leftmost/first one,
+    # conceptually "to do", whatever this project happens to call it.
+    first_column = min(column_map.values(), key=lambda c: c.order) if reset and column_map else None
 
     label_map = {}
     for label in source.labels.all():
@@ -91,16 +110,26 @@ def clone_project(
             project=project,
             name=field.name,
             field_type=field.field_type,
+            level=field.level,
             options=field.options,
             order=field.order,
             show_in_list=field.show_in_list,
         )
 
+    if not reset:
+        project_values = [
+            ProjectCustomFieldValue(field=field_map[value.field_id], project=project, value=value.value)
+            for value in source.custom_values.all()
+            if value.field_id in field_map
+        ]
+        if project_values:
+            ProjectCustomFieldValue.objects.bulk_create(project_values)
+
     task_map = {}
     for task in source_tasks:
         clone = Task.objects.create(
             project=project,
-            column=column_map.get(task.column_id),
+            column=first_column or column_map.get(task.column_id),
             title=task.title,
             description=task.description,
             start_date=_shifted(task.start_date, delta_days),
@@ -128,13 +157,14 @@ def clone_project(
         if keep_assignees:
             clone.assignees.set(task.assignees.all())
             clone.external_assignees.set(task.external_assignees.all())
-        values = [
-            CustomFieldValue(field=field_map[value.field_id], task=clone, value=value.value)
-            for value in task.custom_values.all()
-            if value.field_id in field_map
-        ]
-        if values:
-            CustomFieldValue.objects.bulk_create(values)
+        if not reset:
+            values = [
+                CustomFieldValue(field=field_map[value.field_id], task=clone, value=value.value)
+                for value in task.custom_values.all()
+                if value.field_id in field_map
+            ]
+            if values:
+                CustomFieldValue.objects.bulk_create(values)
 
     dependencies = TaskDependency.objects.filter(predecessor__project=source, successor__project=source)
     TaskDependency.objects.bulk_create(

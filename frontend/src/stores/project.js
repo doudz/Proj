@@ -130,8 +130,10 @@ export const useProjectStore = defineStore("project", {
       this.projects.unshift(data);
       return data;
     },
-    async duplicateProject(projectId, name = null) {
-      const { data } = await api.post(`/projects/${projectId}/duplicate/`, name ? { name } : {});
+    async duplicateProject(projectId, { name = null, reset = false } = {}) {
+      const payload = { reset };
+      if (name) payload.name = name;
+      const { data } = await api.post(`/projects/${projectId}/duplicate/`, payload);
       this.projects.unshift(data);
       return data;
     },

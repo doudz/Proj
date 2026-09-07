@@ -67,7 +67,7 @@
             <v-list-item prepend-icon="mdi-form-select" title="Champs personnalises" @click="customFieldsDialog = true" />
             <v-list-item prepend-icon="mdi-robot-outline" title="Automatisation" @click="automationDialog = true" />
             <v-list-item prepend-icon="mdi-content-save-outline" title="Enregistrer comme modele" @click="openSaveTemplate" />
-            <v-list-item prepend-icon="mdi-content-copy" title="Dupliquer le projet" @click="duplicateProject" />
+            <v-list-item prepend-icon="mdi-content-copy" title="Dupliquer le projet" @click="openDuplicateDialog" />
           </v-list>
         </v-menu>
       </div>
@@ -121,6 +121,35 @@
           <v-spacer />
           <v-btn variant="text" @click="saveTemplateDialog = false">Annuler</v-btn>
           <v-btn color="primary" :disabled="!templateName.trim()" @click="saveAsTemplate">Enregistrer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="duplicateDialog" max-width="460">
+      <v-card title="Dupliquer le projet">
+        <v-card-text>
+          <v-text-field v-model="duplicateName" label="Nom du nouveau projet" autofocus @keyup.enter="duplicateProject" />
+          <v-checkbox
+            v-model="duplicateReset"
+            label="Reinitialiser le nouveau projet"
+            density="compact"
+            hide-details
+          />
+          <p class="text-caption text-medium-emphasis mt-1">
+            <template v-if="duplicateReset">
+              Le projet demarre a zero : statut "Brouillon", toutes les taches reviennent a la premiere colonne, et
+              les champs personnalises (tache et projet) sont vides.
+            </template>
+            <template v-else>
+              Le projet copie garde le statut, la colonne de chaque tache et les champs personnalises remplis du
+              projet d'origine.
+            </template>
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="duplicateDialog = false">Annuler</v-btn>
+          <v-btn color="primary" :disabled="!duplicateName.trim()" @click="duplicateProject">Dupliquer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -220,6 +249,9 @@ const automationDialog = ref(false);
 const projectInfoDialog = ref(false);
 const saveTemplateDialog = ref(false);
 const templateName = ref("");
+const duplicateDialog = ref(false);
+const duplicateName = ref("");
+const duplicateReset = ref(false);
 const snackbar = ref(false);
 const snackbarText = ref("");
 let socket = null;
@@ -348,8 +380,19 @@ async function changeStatus(status) {
   await projectStore.updateProject(projectStore.current.id, { status });
 }
 
+function openDuplicateDialog() {
+  duplicateName.value = `${projectStore.current.name} (copie)`;
+  duplicateReset.value = false;
+  duplicateDialog.value = true;
+}
+
 async function duplicateProject() {
-  const copy = await projectStore.duplicateProject(projectStore.current.id);
+  if (!duplicateName.value.trim()) return;
+  const copy = await projectStore.duplicateProject(projectStore.current.id, {
+    name: duplicateName.value.trim(),
+    reset: duplicateReset.value,
+  });
+  duplicateDialog.value = false;
   router.push({ name: "project", params: { id: copy.id } });
 }
 </script>

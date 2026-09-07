@@ -191,11 +191,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="duplicate")
     def duplicate(self, request, pk=None):
-        """Copy the project as a new independent project (plan only, no history)."""
+        """Copy the project as a new independent project (plan only, no history).
+
+        `reset=true` additionally blanks it out as a fresh start: draft
+        status, every task back on the first column, and no custom field
+        value (task or project level) carried over."""
         project = self.get_object()
         require_project_admin(request.user, project)
         name = (request.data.get("name") or f"{project.name} (copie)").strip()
-        copy = clone_project(project, name=name, created_by=request.user, is_template=project.is_template)
+        reset = bool(request.data.get("reset", False))
+        copy = clone_project(
+            project, name=name, created_by=request.user, is_template=project.is_template, reset=reset
+        )
         return Response(
             ProjectSerializer(copy, context={"request": request}).data, status=status.HTTP_201_CREATED
         )
