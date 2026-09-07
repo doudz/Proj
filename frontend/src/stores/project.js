@@ -137,6 +137,26 @@ export const useProjectStore = defineStore("project", {
       this.projects.unshift(data);
       return data;
     },
+    async exportProject(projectId, format = "xlsx") {
+      const { data, headers } = await api.get(`/projects/${projectId}/export/`, {
+        params: { filetype: format },
+        responseType: "blob",
+      });
+      const match = /filename="?([^"]+)"?/.exec(headers["content-disposition"] || "");
+      const filename = match ? match[1] : `projet.${format}`;
+      const url = URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    },
+    async importProject(projectId, file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(`/projects/${projectId}/import/`, formData);
+      return data;
+    },
     async deleteTemplate(templateId) {
       await api.delete(`/projects/${templateId}/`);
       this.templates = this.templates.filter((t) => t.id !== templateId);

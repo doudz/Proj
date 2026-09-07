@@ -68,6 +68,10 @@
             <v-list-item prepend-icon="mdi-robot-outline" title="Automatisation" @click="automationDialog = true" />
             <v-list-item prepend-icon="mdi-content-save-outline" title="Enregistrer comme modele" @click="openSaveTemplate" />
             <v-list-item prepend-icon="mdi-content-copy" title="Dupliquer le projet" @click="openDuplicateDialog" />
+            <v-divider class="my-1" />
+            <v-list-item prepend-icon="mdi-file-excel-outline" title="Exporter en Excel (.xlsx)" @click="exportProject('xlsx')" />
+            <v-list-item prepend-icon="mdi-file-table-outline" title="Exporter en OpenDocument (.ods)" @click="exportProject('ods')" />
+            <v-list-item prepend-icon="mdi-file-upload-outline" title="Importer un fichier" @click="openImportDialog" />
           </v-list>
         </v-menu>
       </div>
@@ -150,6 +154,49 @@
           <v-spacer />
           <v-btn variant="text" @click="duplicateDialog = false">Annuler</v-btn>
           <v-btn color="primary" :disabled="!duplicateName.trim()" @click="duplicateProject">Dupliquer</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="importDialog" max-width="520" scrollable>
+      <v-card title="Importer un fichier">
+        <v-card-text>
+          <template v-if="!importReport">
+            <p class="text-caption text-medium-emphasis mb-3">
+              Choisissez un fichier .xlsx ou .ods au format d'export de ce projet (feuilles « Taches » et
+              « Informations projet »). Une ligne avec un ID existant met a jour la tache correspondante (statut,
+              avancement, champs personnalises...) ; une ligne sans ID (ou avec un ID inconnu) cree une nouvelle
+              tache. Le statut doit correspondre au nom exact d'une colonne du projet.
+            </p>
+            <v-file-input
+              v-model="importFile"
+              label="Fichier .xlsx ou .ods"
+              accept=".xlsx,.ods"
+              density="compact"
+              prepend-icon="mdi-paperclip"
+              show-size
+            />
+          </template>
+          <template v-else>
+            <v-alert type="success" variant="tonal" density="compact" class="mb-3">
+              {{ importReport.created }} tache(s) creee(s), {{ importReport.updated }} tache(s) mise(s) a jour.
+            </v-alert>
+            <v-alert v-if="importReport.warnings.length" type="warning" variant="tonal" density="compact">
+              <div class="text-caption font-weight-bold mb-1">{{ importReport.warnings.length }} avertissement(s) :</div>
+              <ul class="text-caption pl-4">
+                <li v-for="(w, i) in importReport.warnings" :key="i">{{ w }}</li>
+              </ul>
+            </v-alert>
+          </template>
+          <v-alert v-if="importError" type="error" variant="tonal" density="compact" class="mt-2">{{ importError }}</v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <template v-if="!importReport">
+            <v-btn variant="text" @click="importDialog = false">Annuler</v-btn>
+            <v-btn color="primary" :loading="importing" :disabled="!importFile" @click="runImport">Importer</v-btn>
+          </template>
+          <v-btn v-else color="primary" @click="closeImportDialog">Fermer</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -252,6 +299,11 @@ const templateName = ref("");
 const duplicateDialog = ref(false);
 const duplicateName = ref("");
 const duplicateReset = ref(false);
+const importDialog = ref(false);
+const importFile = ref(null);
+const importing = ref(false);
+const importReport = ref(null);
+const importError = ref("");
 const snackbar = ref(false);
 const snackbarText = ref("");
 let socket = null;
@@ -394,6 +446,41 @@ async function duplicateProject() {
   });
   duplicateDialog.value = false;
   router.push({ name: "project", params: { id: copy.id } });
+}
+
+async function exportProject(format) {
+  await projectStore.exportProject(projectStore.current.id, format);
+}
+
+function openImportDialog() {
+  importFile.value = null;
+  importReport.value = null;
+  importError.value = "";
+  importDialog.value = true;
+}
+
+async function runImport() {
+  const file = Array.isArray(importFile.value) ? importFile.value[0] : importFile.value;
+  if (!file) return;
+  importing.value = true;
+  importError.value = "";
+  try {
+    importReport.value = await projectStore.importProject(projectStore.current.id, file);
+  } catch (e) {
+    importError.value = e.response?.data?.detail || "Import impossible : verifiez le fichier.";
+  } finally {
+    importing.value = false;
+  }
+}
+
+async function closeImportDialog() {
+  importDialog.value = false;
+  if (importReport.value) {
+    await Promise.all([
+      projectStore.fetchProject(projectStore.current.id),
+      taskStore.fetchTasks(projectStore.current.id),
+    ]);
+  }
 }
 </script>
 

@@ -3,6 +3,7 @@ from datetime import date
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db import transaction
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -27,6 +28,7 @@ from apps.projects.serializers import (
     ProjectMembershipSerializer,
     ProjectSerializer,
 )
+from apps.projects.spreadsheet import build_ods, build_xlsx, import_project
 from apps.workspaces.models import Membership
 from apps.workspaces.permissions import user_workspace_ids
 
@@ -213,6 +215,49 @@ class ProjectViewSet(viewsets.ModelViewSet):
         require_project_admin(request.user, project)
         project.memberships.filter(user_id=user_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get"], url_path="export")
+    def export(self, request, pk=None):
+        """Download the project's tasks (+ project-level custom field values)
+        as a spreadsheet - ?filetype=xlsx (default) or ?filetype=ods.
+
+        Deliberately not named "format": DRF reserves that query parameter
+        for its own content-negotiation (?format=json etc.) and 404s when
+        the value isn't a registered renderer, before this method even runs.
+        """
+        project = self.get_object()
+        fmt = request.query_params.get("filetype", "xlsx").lower()
+        if fmt == "ods":
+            content = build_ods(project)
+            content_type = "application/vnd.oasis.opendocument.spreadsheet"
+        else:
+            fmt = "xlsx"
+            content = build_xlsx(project)
+            content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        response = HttpResponse(content, content_type=content_type)
+        filename = f"{project.name}.{fmt}".replace('"', "")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    @action(detail=True, methods=["post"], url_path="import")
+    def import_tasks(self, request, pk=None):
+        """Upsert tasks (matched by the "ID" column) and project-level custom
+        field values from an uploaded .xlsx/.ods spreadsheet - the same shape
+        as the export. Used both to bulk-edit an existing project and to
+        populate a freshly created empty one."""
+        project = self.get_object()
+        require_project_admin(request.user, project)
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response({"detail": "Aucun fichier fourni."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            report = import_project(project, upload, upload.name, request.user)
+        except Exception:
+            return Response(
+                {"detail": "Fichier illisible : verifiez qu'il s'agit bien d'un export .xlsx ou .ods de ce format."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(report)
 
 class BoardColumnViewSet(viewsets.ModelViewSet):
     serializer_class = BoardColumnSerializer
