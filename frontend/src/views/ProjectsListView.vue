@@ -66,6 +66,7 @@
 <script setup>
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { PROJECT_STATUSES, projectStatusColor, projectStatusLabel } from "@/utils/projectStatus";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -76,13 +77,7 @@ const router = useRouter();
 const dialog = ref(false);
 const name = ref("");
 const statusFilter = ref(null);
-const statuses = [
-  { title: "Planifie", value: "planned" },
-  { title: "En cours", value: "active" },
-  { title: "En pause", value: "on_hold" },
-  { title: "Termine", value: "done" },
-  { title: "Archive", value: "archived" },
-];
+const statuses = PROJECT_STATUSES;
 
 const filtered = computed(() =>
   statusFilter.value ? projectStore.projects.filter((p) => p.status === statusFilter.value) : projectStore.projects
@@ -92,12 +87,8 @@ onMounted(() => {
   if (workspaceStore.current) projectStore.fetchProjects(workspaceStore.current.id);
 });
 
-function statusLabel(status) {
-  return statuses.find((s) => s.value === status)?.title || status;
-}
-function statusColor(status) {
-  return { planned: "grey", active: "primary", on_hold: "warning", done: "success", archived: "grey-darken-1" }[status];
-}
+const statusLabel = projectStatusLabel;
+const statusColor = projectStatusColor;
 
 async function create() {
   if (!name.value.trim()) return;

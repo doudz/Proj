@@ -9,6 +9,26 @@
           <h1 class="text-h5 font-weight-bold">{{ projectStore.current.name }}</h1>
           <p class="text-caption text-medium-emphasis mb-0">{{ projectStore.current.tasks_count }} tache(s) - {{ projectStore.current.progress }}% termine</p>
         </div>
+        <v-menu v-if="isAdmin">
+          <template #activator="{ props: menuProps }">
+            <v-chip v-bind="menuProps" size="small" :color="projectStatusColor(projectStore.current.status)" class="ml-4" style="cursor: pointer">
+              {{ projectStatusLabel(projectStore.current.status) }}
+              <v-icon icon="mdi-menu-down" size="16" class="ml-1" />
+            </v-chip>
+          </template>
+          <v-list density="compact">
+            <v-list-item
+              v-for="s in PROJECT_STATUSES"
+              :key="s.value"
+              :title="s.title"
+              :prepend-icon="s.value === projectStore.current.status ? 'mdi-check' : undefined"
+              @click="changeStatus(s.value)"
+            />
+          </v-list>
+        </v-menu>
+        <v-chip v-else size="small" :color="projectStatusColor(projectStore.current.status)" class="ml-4">
+          {{ projectStatusLabel(projectStore.current.status) }}
+        </v-chip>
         <v-spacer />
         <div class="d-flex mr-4">
           <v-avatar
@@ -157,6 +177,7 @@ import { useDirectoryStore } from "@/stores/directory";
 import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useTaskStore } from "@/stores/task";
+import { PROJECT_STATUSES, projectStatusColor, projectStatusLabel } from "@/utils/projectStatus";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -286,6 +307,10 @@ async function saveAsTemplate() {
   saveTemplateDialog.value = false;
   snackbarText.value = `Modele "${template.name}" enregistre.`;
   snackbar.value = true;
+}
+
+async function changeStatus(status) {
+  await projectStore.updateProject(projectStore.current.id, { status });
 }
 
 async function duplicateProject() {

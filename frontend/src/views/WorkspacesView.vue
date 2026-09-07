@@ -28,6 +28,9 @@
                   <v-icon :icon="project.icon" color="white" />
                 </v-avatar>
               </template>
+              <template #append>
+                <v-chip size="small" :color="projectStatusColor(project.status)">{{ projectStatusLabel(project.status) }}</v-chip>
+              </template>
               <v-card-title>{{ project.name }}</v-card-title>
               <v-card-subtitle>{{ project.tasks_count }} tache(s)</v-card-subtitle>
             </v-card-item>
@@ -155,6 +158,7 @@
 import { useDirectoryStore } from "@/stores/directory";
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { projectStatusColor, projectStatusLabel } from "@/utils/projectStatus";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
