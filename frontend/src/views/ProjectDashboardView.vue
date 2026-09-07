@@ -76,6 +76,7 @@
         </v-menu>
       </div>
       <v-tabs v-model="tab" class="mt-4">
+        <v-tab value="dashboard" prepend-icon="mdi-chart-box-outline">Tableau de bord</v-tab>
         <v-tab value="board" prepend-icon="mdi-view-column-outline">Tableau</v-tab>
         <v-tab value="gantt" prepend-icon="mdi-chart-gantt">Gantt</v-tab>
         <v-tab value="list" prepend-icon="mdi-format-list-bulleted">Liste</v-tab>
@@ -84,6 +85,9 @@
     </div>
     <v-divider />
     <v-window v-model="tab" class="flex-grow-1 overflow-auto">
+      <v-window-item value="dashboard" class="pa-4">
+        <ProjectDashboard :project="projectStore.current" @open-task="openTask" />
+      </v-window-item>
       <v-window-item value="board" class="pa-4">
         <KanbanBoard :project="projectStore.current" @open-task="openTask" @create-task="openCreateTask" />
       </v-window-item>
@@ -262,6 +266,7 @@ import KanbanBoard from "@/components/kanban/KanbanBoard.vue";
 import AutomationRulesDialog from "@/components/project/AutomationRulesDialog.vue";
 import ColumnsLabelsDialog from "@/components/project/ColumnsLabelsDialog.vue";
 import CustomFieldsDialog from "@/components/project/CustomFieldsDialog.vue";
+import ProjectDashboard from "@/components/project/ProjectDashboard.vue";
 import ProjectInfoDialog from "@/components/project/ProjectInfoDialog.vue";
 import TaskDetailDialog from "@/components/task/TaskDetailDialog.vue";
 import TaskListView from "@/components/task/TaskListView.vue";
@@ -283,7 +288,7 @@ const directoryStore = useDirectoryStore();
 const route = useRoute();
 const router = useRouter();
 
-const tab = ref("board");
+const tab = ref("dashboard");
 const taskDialog = ref(false);
 const selectedTaskId = ref(null);
 const defaultColumn = ref(null);
@@ -375,6 +380,7 @@ async function addMember() {
 }
 
 async function load(id) {
+  tab.value = "dashboard";
   await projectStore.fetchProject(id);
   await taskStore.fetchTasks(id);
   socket?.close();
