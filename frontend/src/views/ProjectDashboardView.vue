@@ -21,18 +21,6 @@
             </v-chip>
           </div>
         </div>
-        <v-tooltip v-if="projectInfoFields.length" location="top" text="Informations du projet">
-          <template #activator="{ props: tipProps }">
-            <v-btn
-              v-bind="tipProps"
-              icon="mdi-information-outline"
-              variant="text"
-              size="small"
-              class="ml-2"
-              @click="projectInfoDialog = true"
-            />
-          </template>
-        </v-tooltip>
         <v-menu v-if="isAdmin">
           <template #activator="{ props: menuProps }">
             <v-chip v-bind="menuProps" size="small" :color="projectStatusColor(projectStore.current.status)" class="ml-4" style="cursor: pointer">
@@ -65,6 +53,9 @@
             <span class="text-caption text-white">{{ m.initials }}</span>
           </v-avatar>
         </div>
+        <v-btn prepend-icon="mdi-information-outline" variant="tonal" class="mr-2" @click="projectInfoDialog = true">
+          Informations
+        </v-btn>
         <v-btn prepend-icon="mdi-account-multiple-outline" variant="tonal" class="mr-2" @click="membersDialog = true">Membres</v-btn>
         <v-btn v-if="isAdmin" color="primary" prepend-icon="mdi-plus" @click="openCreateTask()">Nouvelle tache</v-btn>
         <v-menu v-if="isAdmin">
