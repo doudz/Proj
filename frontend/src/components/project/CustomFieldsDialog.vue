@@ -14,7 +14,17 @@
               <template #prepend>
                 <v-icon :icon="typeIcon(field.field_type)" class="mr-2" />
               </template>
-              <v-list-item-title>{{ field.name }}</v-list-item-title>
+              <v-list-item-title>
+                <v-text-field
+                  v-model="field.name"
+                  variant="plain"
+                  density="compact"
+                  hide-details
+                  class="field-name-input"
+                  @blur="renameField(field)"
+                  @keyup.enter="(e) => e.target.blur()"
+                />
+              </v-list-item-title>
               <v-list-item-subtitle>
                 {{ typeLabel(field.field_type) }}
                 <span v-if="field.field_type === 'select' && field.options.length">
@@ -47,7 +57,17 @@
               <template #prepend>
                 <v-icon :icon="typeIcon(field.field_type)" class="mr-2" />
               </template>
-              <v-list-item-title>{{ field.name }}</v-list-item-title>
+              <v-list-item-title>
+                <v-text-field
+                  v-model="field.name"
+                  variant="plain"
+                  density="compact"
+                  hide-details
+                  class="field-name-input"
+                  @blur="renameField(field)"
+                  @keyup.enter="(e) => e.target.blur()"
+                />
+              </v-list-item-title>
               <v-list-item-subtitle>
                 {{ typeLabel(field.field_type) }}
                 <span v-if="field.field_type === 'select' && field.options.length">
@@ -198,6 +218,22 @@ async function create() {
   }
 }
 
+async function renameField(field) {
+  const name = field.name.trim();
+  if (!name) {
+    error.value = "Le nom du champ ne peut pas etre vide.";
+    await projectStore.fetchProject(props.project.id);
+    return;
+  }
+  try {
+    error.value = "";
+    await projectStore.updateCustomField(field.id, { name });
+  } catch (e) {
+    error.value = e.response?.data?.name?.[0] || "Impossible de renommer ce champ.";
+    await projectStore.fetchProject(props.project.id);
+  }
+}
+
 async function toggleInList(field) {
   await projectStore.updateCustomField(field.id, { show_in_list: !field.show_in_list });
 }
@@ -208,3 +244,9 @@ async function remove(field) {
   }
 }
 </script>
+
+<style scoped>
+.field-name-input {
+  margin-top: -6px;
+}
+</style>
