@@ -8,7 +8,31 @@
         <div>
           <h1 class="text-h5 font-weight-bold">{{ projectStore.current.name }}</h1>
           <p class="text-caption text-medium-emphasis mb-0">{{ projectStore.current.tasks_count }} tache(s) - {{ projectStore.current.progress }}% termine</p>
+          <div v-if="filledProjectInfoChips.length" class="d-flex flex-wrap ga-1 mt-1">
+            <v-chip
+              v-for="c in filledProjectInfoChips"
+              :key="c.field.id"
+              size="x-small"
+              variant="tonal"
+              style="cursor: pointer"
+              @click="projectInfoDialog = true"
+            >
+              {{ c.field.name }} : {{ c.display }}
+            </v-chip>
+          </div>
         </div>
+        <v-tooltip v-if="projectInfoFields.length" location="top" text="Informations du projet">
+          <template #activator="{ props: tipProps }">
+            <v-btn
+              v-bind="tipProps"
+              icon="mdi-information-outline"
+              variant="text"
+              size="small"
+              class="ml-2"
+              @click="projectInfoDialog = true"
+            />
+          </template>
+        </v-tooltip>
         <v-menu v-if="isAdmin">
           <template #activator="{ props: menuProps }">
             <v-chip v-bind="menuProps" size="small" :color="projectStatusColor(projectStore.current.status)" class="ml-4" style="cursor: pointer">
@@ -91,6 +115,7 @@
     <CustomFieldsDialog v-model="customFieldsDialog" :project="projectStore.current" />
     <ColumnsLabelsDialog v-model="columnsLabelsDialog" :project="projectStore.current" />
     <AutomationRulesDialog v-model="automationDialog" :project="projectStore.current" />
+    <ProjectInfoDialog v-model="projectInfoDialog" :project="projectStore.current" />
 
     <v-dialog v-model="saveTemplateDialog" max-width="460">
       <v-card title="Enregistrer comme modele">
@@ -170,6 +195,7 @@ import KanbanBoard from "@/components/kanban/KanbanBoard.vue";
 import AutomationRulesDialog from "@/components/project/AutomationRulesDialog.vue";
 import ColumnsLabelsDialog from "@/components/project/ColumnsLabelsDialog.vue";
 import CustomFieldsDialog from "@/components/project/CustomFieldsDialog.vue";
+import ProjectInfoDialog from "@/components/project/ProjectInfoDialog.vue";
 import TaskDetailDialog from "@/components/task/TaskDetailDialog.vue";
 import TaskListView from "@/components/task/TaskListView.vue";
 import { connectSocket } from "@/services/ws";
@@ -200,6 +226,7 @@ const newMemberRole = ref("member");
 const customFieldsDialog = ref(false);
 const columnsLabelsDialog = ref(false);
 const automationDialog = ref(false);
+const projectInfoDialog = ref(false);
 const saveTemplateDialog = ref(false);
 const templateName = ref("");
 const snackbar = ref(false);
@@ -207,6 +234,23 @@ const snackbarText = ref("");
 let socket = null;
 
 const isAdmin = computed(() => projectStore.current?.my_role === "admin");
+
+const projectInfoFields = computed(() =>
+  (projectStore.current?.custom_fields || []).filter((f) => f.level === "project")
+);
+
+const filledProjectInfoChips = computed(() => {
+  const values = projectStore.current?.custom_values || {};
+  return projectInfoFields.value
+    .map((field) => ({ field, display: displayCustomValue(field, values[String(field.id)]) }))
+    .filter((c) => c.display);
+});
+
+function displayCustomValue(field, raw) {
+  if (!raw) return "";
+  if (field.field_type === "checkbox") return raw === "true" ? "Oui" : "";
+  return raw;
+}
 
 const roleOptions = [
   { title: "Administrateur", value: "admin" },

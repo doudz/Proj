@@ -252,17 +252,18 @@
                 </v-col>
               </v-row>
 
-              <template v-if="customFields.length">
+              <template v-if="visibleCustomFields.length || hiddenCustomFields.length">
                 <v-divider class="my-2" />
                 <div class="text-caption text-medium-emphasis mb-1">Champs personnalises</div>
                 <v-row dense>
-                  <v-col v-for="field in customFields" :key="field.id" cols="6">
+                  <v-col v-for="field in visibleCustomFields" :key="field.id" cols="6" class="d-flex align-center">
                     <v-checkbox
                       v-if="field.field_type === 'checkbox'"
                       :model-value="customDraft[field.id] === 'true'"
                       :label="field.name"
                       density="compact"
                       hide-details
+                      class="flex-grow-1"
                       :readonly="!canEditState"
                       @update:model-value="(v) => saveCustom(field, v ? 'true' : 'false')"
                     />
@@ -274,6 +275,7 @@
                       density="compact"
                       hide-details
                       clearable
+                      class="flex-grow-1"
                       :readonly="!canEditState"
                       @update:model-value="(v) => saveCustom(field, v)"
                     />
@@ -284,11 +286,39 @@
                       :type="inputTypeFor(field)"
                       density="compact"
                       hide-details
+                      class="flex-grow-1"
                       :readonly="!canEditState"
                       @blur="saveCustom(field, customDraft[field.id])"
                     />
+                    <v-tooltip v-if="canEditFull" location="top" text="Masquer ce champ pour cette tache">
+                      <template #activator="{ props: tipProps }">
+                        <v-btn
+                          v-bind="tipProps"
+                          icon="mdi-eye-off-outline"
+                          variant="text"
+                          size="x-small"
+                          class="ml-1"
+                          @click="toggleCustomFieldForTask(field, false)"
+                        />
+                      </template>
+                    </v-tooltip>
                   </v-col>
                 </v-row>
+                <div v-if="canEditFull && hiddenCustomFields.length" class="mt-2">
+                  <span class="text-caption text-medium-emphasis mr-1">Masques pour cette tache :</span>
+                  <v-chip
+                    v-for="field in hiddenCustomFields"
+                    :key="field.id"
+                    size="small"
+                    variant="outlined"
+                    closable
+                    close-icon="mdi-eye-outline"
+                    class="mr-1 mb-1"
+                    @click:close="toggleCustomFieldForTask(field, true)"
+                  >
+                    {{ field.name }}
+                  </v-chip>
+                </div>
               </template>
             </v-window-item>
 
@@ -581,7 +611,10 @@ const canEditFull = computed(() => task.value?.can_edit_full ?? false);
 const canEditState = computed(() => task.value?.can_edit_state ?? false);
 const canComment = computed(() => props.project.my_role === "admin" || props.project.my_role === "member");
 
-const customFields = computed(() => props.project.custom_fields || []);
+const customFields = computed(() => (props.project.custom_fields || []).filter((f) => f.level !== "project"));
+const excludedFieldIds = computed(() => new Set(task.value?.excluded_custom_field_ids || []));
+const visibleCustomFields = computed(() => customFields.value.filter((f) => !excludedFieldIds.value.has(f.id)));
+const hiddenCustomFields = computed(() => customFields.value.filter((f) => excludedFieldIds.value.has(f.id)));
 // Local buffer so the inputs stay editable while the value is being typed;
 // it is re-synced from the server every time the task changes.
 const customDraft = reactive({});
@@ -730,6 +763,11 @@ async function saveCustom(field, value) {
   const next = value ?? "";
   if ((task.value.custom_values?.[String(field.id)] ?? "") === String(next)) return;
   await patch({ custom_field_values: { [field.id]: next } });
+}
+
+async function toggleCustomFieldForTask(field, enabled) {
+  if (!task.value || !canEditFull.value) return;
+  await taskStore.toggleCustomField(task.value.id, field.id, enabled);
 }
 
 async function applyDuration() {

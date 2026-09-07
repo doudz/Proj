@@ -98,13 +98,14 @@ class Label(models.Model):
 
 
 class CustomField(models.Model):
-    """A user-defined field added to every task of a project.
+    """A user-defined field added to every task (or to the project itself).
 
     The project owns the definition; the value for a given task lives in
-    apps.tasks.models.CustomFieldValue. Values are always stored as text and
-    interpreted according to `field_type` - that keeps a single storage shape
-    while still letting the UI render the right editor and the search filter
-    on them.
+    apps.tasks.models.CustomFieldValue, and the value for the project itself
+    (level=PROJECT) lives in ProjectCustomFieldValue below. Values are always
+    stored as text and interpreted according to `field_type` - that keeps a
+    single storage shape while still letting the UI render the right editor
+    and the search filter on them.
     """
 
     class FieldType(models.TextChoices):
@@ -115,14 +116,23 @@ class CustomField(models.Model):
         CHECKBOX = "checkbox", "Case a cocher"
         URL = "url", "Lien"
 
+    class Level(models.TextChoices):
+        TASK = "task", "Tache"
+        PROJECT = "project", "Projet"
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="custom_fields")
     name = models.CharField(max_length=80)
     field_type = models.CharField(max_length=10, choices=FieldType.choices, default=FieldType.TEXT)
+    level = models.CharField(max_length=10, choices=Level.choices, default=Level.TASK)
     # Choices for the "select" type, ignored otherwise.
     options = models.JSONField(default=list, blank=True)
     order = models.PositiveIntegerField(default=0)
-    # When true the field gets its own column in the task list view.
+    # When true the field gets its own column in the task list view. Only
+    # meaningful for level=TASK.
     show_in_list = models.BooleanField(default=False)
+    # A level=TASK field applies to every task of the project by default; a
+    # task can opt out here when the field doesn't make sense for it.
+    excluded_tasks = models.ManyToManyField("tasks.Task", blank=True, related_name="excluded_custom_fields")
 
     class Meta:
         ordering = ["order", "id"]
@@ -130,6 +140,21 @@ class CustomField(models.Model):
 
     def __str__(self):
         return f"{self.project.name} / {self.name}"
+
+
+class ProjectCustomFieldValue(models.Model):
+    """The value a project holds for one of its own (level=PROJECT) custom
+    fields - the project-level counterpart to apps.tasks.models.CustomFieldValue."""
+
+    field = models.ForeignKey(CustomField, on_delete=models.CASCADE, related_name="project_values")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="custom_values")
+    value = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ("field", "project")
+
+    def __str__(self):
+        return f"{self.project.name} / {self.field.name} = {self.value}"
 
 
 class AutomationRule(models.Model):

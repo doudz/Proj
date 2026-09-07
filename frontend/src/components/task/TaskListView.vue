@@ -73,7 +73,9 @@ defineEmits(["open-task"]);
 
 const taskStore = useTaskStore();
 
-const listCustomFields = computed(() => (props.project.custom_fields || []).filter((f) => f.show_in_list));
+const listCustomFields = computed(() =>
+  (props.project.custom_fields || []).filter((f) => f.show_in_list && f.level !== "project")
+);
 
 const headers = computed(() => [
   { title: "Tache", key: "title" },

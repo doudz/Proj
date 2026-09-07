@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
-from apps.projects.models import Label
+from apps.projects.models import CustomField, Label
 from apps.projects.permissions import can_edit_task_state, is_project_admin
 from apps.projects.serializers import LabelSerializer
 from apps.tasks.models import (
@@ -125,6 +125,9 @@ class TaskSerializer(serializers.ModelSerializer):
     duration_days = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     custom_values = serializers.SerializerMethodField()
     custom_field_values = serializers.DictField(write_only=True, required=False)
+    # Task-level custom fields apply to every task of the project by default;
+    # this lists the ones this specific task has opted out of.
+    excluded_custom_field_ids = serializers.SerializerMethodField()
     # True when a predecessor dictates when this task starts: the date is then
     # derived from the link, not chosen by hand.
     is_start_locked = serializers.SerializerMethodField()
@@ -151,6 +154,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "start_driver",
             "custom_values",
             "custom_field_values",
+            "excluded_custom_field_ids",
             "baseline_start_date",
             "baseline_end_date",
             "actual_start_date",
@@ -278,6 +282,9 @@ class TaskSerializer(serializers.ModelSerializer):
         with the project, so the task only carries what it holds."""
         return {str(value.field_id): value.value for value in obj.custom_values.all()}
 
+    def get_excluded_custom_field_ids(self, obj):
+        return list(obj.excluded_custom_fields.values_list("id", flat=True))
+
     def _apply_duration(self, validated_data, instance=None):
         """Reconcile start date, end date and duration into a coherent pair.
 
@@ -308,7 +315,9 @@ class TaskSerializer(serializers.ModelSerializer):
     def _save_custom_values(self, task, raw_values):
         if not raw_values:
             return
-        allowed_ids = set(task.project.custom_fields.values_list("id", flat=True))
+        allowed_ids = set(
+            task.project.custom_fields.filter(level=CustomField.Level.TASK).values_list("id", flat=True)
+        )
         for key, value in raw_values.items():
             try:
                 field_id = int(key)

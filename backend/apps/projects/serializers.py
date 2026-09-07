@@ -2,7 +2,15 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
-from apps.projects.models import AutomationRule, BoardColumn, CustomField, Label, Project, ProjectMembership
+from apps.projects.models import (
+    AutomationRule,
+    BoardColumn,
+    CustomField,
+    Label,
+    Project,
+    ProjectCustomFieldValue,
+    ProjectMembership,
+)
 from apps.projects.permissions import get_project_role
 
 User = get_user_model()
@@ -25,7 +33,7 @@ class LabelSerializer(serializers.ModelSerializer):
 class CustomFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomField
-        fields = ["id", "project", "name", "field_type", "options", "order", "show_in_list"]
+        fields = ["id", "project", "name", "field_type", "level", "options", "order", "show_in_list"]
         read_only_fields = ["id"]
 
 
@@ -96,6 +104,11 @@ class ProjectSerializer(serializers.ModelSerializer):
     tasks_count = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
     my_role = serializers.SerializerMethodField()
+    # Values for this project's own (level="project") custom fields, shown in
+    # the project header - the project-level counterpart to how a task holds
+    # custom_values/custom_field_values for level="task" fields.
+    custom_values = serializers.SerializerMethodField()
+    custom_field_values = serializers.DictField(write_only=True, required=False)
 
     class Meta:
         model = Project
@@ -116,6 +129,8 @@ class ProjectSerializer(serializers.ModelSerializer):
             "columns",
             "labels",
             "custom_fields",
+            "custom_values",
+            "custom_field_values",
             "tasks_count",
             "progress",
             "my_role",
@@ -137,3 +152,36 @@ class ProjectSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return None
         return get_project_role(request.user, obj)
+
+    def get_custom_values(self, obj):
+        """{"<custom_field_id>": "value"} for this project's level="project" fields."""
+        return {str(value.field_id): value.value for value in obj.custom_values.all()}
+
+    def _save_custom_values(self, project, raw_values):
+        if not raw_values:
+            return
+        allowed_ids = set(
+            project.custom_fields.filter(level=CustomField.Level.PROJECT).values_list("id", flat=True)
+        )
+        for key, value in raw_values.items():
+            try:
+                field_id = int(key)
+            except (TypeError, ValueError):
+                continue
+            if field_id not in allowed_ids:
+                continue
+            ProjectCustomFieldValue.objects.update_or_create(
+                field_id=field_id, project=project, defaults={"value": "" if value is None else str(value)}
+            )
+
+    def create(self, validated_data):
+        custom_values = validated_data.pop("custom_field_values", None)
+        project = super().create(validated_data)
+        self._save_custom_values(project, custom_values)
+        return project
+
+    def update(self, instance, validated_data):
+        custom_values = validated_data.pop("custom_field_values", None)
+        project = super().update(instance, validated_data)
+        self._save_custom_values(project, custom_values)
+        return project

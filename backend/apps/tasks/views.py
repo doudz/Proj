@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-from apps.projects.models import AutomationRule
+from apps.projects.models import AutomationRule, CustomField
 from apps.projects.permissions import (
     can_edit_task_state,
     is_project_admin,
@@ -163,6 +163,21 @@ class TaskViewSet(viewsets.ModelViewSet):
         log_activity(task, request.user, "a replanifie la tache", {"start_date": start_date, "due_date": due_date})
         self._broadcast(task.project_id, "task.updated", TaskSerializer(task).data)
         self._broadcast_moved(reschedule_successors(task))
+        return Response(TaskSerializer(task, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path="toggle-custom-field")
+    def toggle_custom_field(self, request, pk=None):
+        """Opt a task in/out of one of the project's task-level custom fields -
+        a field can make sense on most tasks but not on this particular one."""
+        task = self.get_object()
+        require_project_admin(request.user, task.project)
+        field = get_object_or_404(
+            CustomField, id=request.data.get("field"), project_id=task.project_id, level=CustomField.Level.TASK
+        )
+        if request.data.get("enabled", True):
+            task.excluded_custom_fields.remove(field)
+        else:
+            task.excluded_custom_fields.add(field)
         return Response(TaskSerializer(task, context={"request": request}).data)
 
     @action(detail=True, methods=["get"], url_path="activity")

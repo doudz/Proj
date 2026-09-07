@@ -80,6 +80,11 @@ export const useTaskStore = defineStore("task", {
       await this._refreshSuccessors(id);
       return data;
     },
+    async toggleCustomField(id, fieldId, enabled) {
+      const { data } = await api.post(`/tasks/${id}/toggle-custom-field/`, { field: fieldId, enabled });
+      this._upsert(data);
+      return data;
+    },
     async startTask(id, date = null) {
       const { data } = await api.post(`/tasks/${id}/start/`, date ? { date } : {});
       this._upsert(data);

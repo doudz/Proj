@@ -40,7 +40,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             Project.objects.filter(workspace_id__in=user_workspace_ids(self.request.user))
-            .prefetch_related("members", "memberships__user", "columns", "labels", "custom_fields")
+            .prefetch_related("members", "memberships__user", "columns", "labels", "custom_fields", "custom_values")
             .distinct()
         )
         # Templates are blueprints, not work: they stay out of the project lists
