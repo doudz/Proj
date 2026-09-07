@@ -164,7 +164,7 @@ import { useNotificationStore } from "@/stores/notification";
 import { useProjectStore } from "@/stores/project";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 
 const drawer = ref(true);
 const notifMenu = ref(false);
@@ -181,7 +181,6 @@ const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
 const notificationStore = useNotificationStore();
 const router = useRouter();
-const route = useRoute();
 
 onMounted(async () => {
   if (!authStore.user) await authStore.fetchMe();
@@ -197,10 +196,11 @@ watch(
   () => workspaceStore.current,
   async (ws, previous) => {
     if (!ws) return;
-    // A project displayed for the previous workspace has no meaning once the
-    // workspace changes - fall back to the project list rather than leaving
-    // stale data on screen (only when actually switching, not on first load).
-    if (previous && route.name === "project") {
+    // Switching workspace always lands on that workspace's own dashboard -
+    // whatever page was showing (a project, search results, the multi-project
+    // view...) has no meaning for the newly selected workspace (only when
+    // actually switching, not on first load).
+    if (previous) {
       router.push({ name: "workspaces" });
     }
     await projectStore.fetchProjects(ws.id);
