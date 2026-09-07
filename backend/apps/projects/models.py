@@ -6,7 +6,7 @@ from apps.workspaces.models import Workspace
 
 class Project(models.Model):
     class Status(models.TextChoices):
-        PLANNED = "planned", "Planifie"
+        PLANNED = "planned", "Brouillon"
         ACTIVE = "active", "En cours"
         ON_HOLD = "on_hold", "En pause"
         DONE = "done", "Termine"
@@ -17,7 +17,9 @@ class Project(models.Model):
     description = models.TextField(blank=True)
     color = models.CharField(max_length=7, default="#42A5F5")
     icon = models.CharField(max_length=32, default="mdi-rocket-launch-outline")
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    # A new project starts as a draft - it becomes "active" explicitly once
+    # someone actually starts working on it, not the instant it's created.
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PLANNED)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     baseline_captured_at = models.DateTimeField(null=True, blank=True)

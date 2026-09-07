@@ -1,6 +1,6 @@
 // Shared with the backend's Project.Status choices (apps/projects/models.py).
 export const PROJECT_STATUSES = [
-  { title: "Planifie", value: "planned" },
+  { title: "Brouillon", value: "planned" },
   { title: "En cours", value: "active" },
   { title: "En pause", value: "on_hold" },
   { title: "Termine", value: "done" },
