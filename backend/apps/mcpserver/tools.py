@@ -10,6 +10,7 @@ same action taken from the web UI - one set of business rules, not two.
 from asgiref.sync import sync_to_async
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.mcpserver.context import get_current_user
@@ -418,3 +419,28 @@ async def set_project_custom_fields(project_id: int, values: dict) -> dict:
     """
     data = {"custom_field_values": _normalize_custom_values(values)}
     return await _call("PATCH", ProjectViewSet, {"patch": "partial_update"}, data=data, pk=project_id)
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=True, idempotentHint=False))
+async def delete_custom_field(field_id: int) -> dict:
+    """Supprime un champ personnalise (reserve aux administrateurs du projet).
+
+    Irreversible : toutes les valeurs saisies pour ce champ, sur toutes les
+    taches (ou le projet), sont perdues avec lui.
+    """
+    await _call("DELETE", CustomFieldViewSet, {"delete": "destroy"}, pk=field_id)
+    return {"deleted": True, "id": field_id}
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
+async def reorder_custom_fields(project_id: int, field_ids: list) -> dict:
+    """Reordonne les champs personnalises d'un projet au sein d'un meme niveau (cle "items").
+
+    field_ids : liste ordonnee des identifiants de TOUS les champs d'un seul
+    niveau - tache ou projet (voir list_custom_fields, filtre par level) -
+    le premier de la liste devient le premier affiche, etc. Les champs de
+    l'autre niveau, ou omis de la liste, ne sont pas affectes.
+    """
+    return await _call(
+        "POST", ProjectViewSet, {"post": "reorder_custom_fields"}, data={"order": field_ids}, pk=project_id
+    )

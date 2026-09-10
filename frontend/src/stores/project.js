@@ -41,6 +41,11 @@ export const useProjectStore = defineStore("project", {
       if (this.current?.id === projectId) this.current.columns = data;
       return data;
     },
+    async reorderCustomFields(projectId, order) {
+      const { data } = await api.post(`/projects/${projectId}/reorder-custom-fields/`, { order });
+      if (this.current?.id === projectId) this.current.custom_fields = data;
+      return data;
+    },
     async createColumn(payload) {
       const { data } = await api.post("/board-columns/", payload);
       if (this.current) this.current.columns.push(data);

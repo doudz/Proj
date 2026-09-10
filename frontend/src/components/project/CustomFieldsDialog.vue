@@ -4,34 +4,33 @@
       <v-card-subtitle class="px-4">
         Ajoutez vos propres informations aux taches ou au projet lui-meme (client, budget, phase...). Un champ de
         tache apparait dans le detail de chaque tache (et peut etre masque au cas par cas) ; un champ de projet
-        apparait dans l'entete du projet.
+        apparait dans l'entete du projet. Glissez pour reordonner au sein d'un meme groupe.
       </v-card-subtitle>
       <v-card-text>
-        <template v-if="taskFields.length">
+        <template v-if="localTaskFields.length">
           <div class="text-subtitle-2 mb-1">Champs de tache</div>
-          <v-list density="comfortable" class="mb-2">
-            <v-list-item v-for="field in taskFields" :key="field.id">
-              <template #prepend>
+          <draggable :list="localTaskFields" item-key="id" handle=".field-handle" class="mb-2" @change="onTaskFieldsReorder">
+            <template #item="{ element: field }">
+              <div class="d-flex align-center py-1">
+                <v-icon icon="mdi-drag-vertical" class="field-handle mr-1" style="cursor: grab" />
                 <v-icon :icon="typeIcon(field.field_type)" class="mr-2" />
-              </template>
-              <v-list-item-title>
-                <v-text-field
-                  v-model="field.name"
-                  variant="plain"
-                  density="compact"
-                  hide-details
-                  class="field-name-input"
-                  @blur="renameField(field)"
-                  @keyup.enter="(e) => e.target.blur()"
-                />
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                {{ typeLabel(field.field_type) }}
-                <span v-if="field.field_type === 'select' && field.options.length">
-                  : {{ field.options.join(", ") }}
-                </span>
-              </v-list-item-subtitle>
-              <template #append>
+                <div class="flex-grow-1">
+                  <v-text-field
+                    v-model="field.name"
+                    variant="plain"
+                    density="compact"
+                    hide-details
+                    class="field-name-input"
+                    @blur="renameField(field)"
+                    @keyup.enter="(e) => e.target.blur()"
+                  />
+                  <div class="text-caption text-medium-emphasis">
+                    {{ typeLabel(field.field_type) }}
+                    <span v-if="field.field_type === 'select' && field.options.length">
+                      : {{ field.options.join(", ") }}
+                    </span>
+                  </div>
+                </div>
                 <v-tooltip location="top" text="Afficher comme colonne dans la vue liste">
                   <template #activator="{ props: tipProps }">
                     <v-btn
@@ -45,40 +44,39 @@
                   </template>
                 </v-tooltip>
                 <v-btn icon="mdi-delete-outline" variant="text" size="small" @click="remove(field)" />
-              </template>
-            </v-list-item>
-          </v-list>
+              </div>
+            </template>
+          </draggable>
         </template>
 
-        <template v-if="projectFields.length">
+        <template v-if="localProjectFields.length">
           <div class="text-subtitle-2 mb-1">Champs de projet</div>
-          <v-list density="comfortable" class="mb-2">
-            <v-list-item v-for="field in projectFields" :key="field.id">
-              <template #prepend>
+          <draggable :list="localProjectFields" item-key="id" handle=".field-handle" class="mb-2" @change="onProjectFieldsReorder">
+            <template #item="{ element: field }">
+              <div class="d-flex align-center py-1">
+                <v-icon icon="mdi-drag-vertical" class="field-handle mr-1" style="cursor: grab" />
                 <v-icon :icon="typeIcon(field.field_type)" class="mr-2" />
-              </template>
-              <v-list-item-title>
-                <v-text-field
-                  v-model="field.name"
-                  variant="plain"
-                  density="compact"
-                  hide-details
-                  class="field-name-input"
-                  @blur="renameField(field)"
-                  @keyup.enter="(e) => e.target.blur()"
-                />
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                {{ typeLabel(field.field_type) }}
-                <span v-if="field.field_type === 'select' && field.options.length">
-                  : {{ field.options.join(", ") }}
-                </span>
-              </v-list-item-subtitle>
-              <template #append>
+                <div class="flex-grow-1">
+                  <v-text-field
+                    v-model="field.name"
+                    variant="plain"
+                    density="compact"
+                    hide-details
+                    class="field-name-input"
+                    @blur="renameField(field)"
+                    @keyup.enter="(e) => e.target.blur()"
+                  />
+                  <div class="text-caption text-medium-emphasis">
+                    {{ typeLabel(field.field_type) }}
+                    <span v-if="field.field_type === 'select' && field.options.length">
+                      : {{ field.options.join(", ") }}
+                    </span>
+                  </div>
+                </div>
                 <v-btn icon="mdi-delete-outline" variant="text" size="small" @click="remove(field)" />
-              </template>
-            </v-list-item>
-          </v-list>
+              </div>
+            </template>
+          </draggable>
         </template>
 
         <p v-if="!fields.length" class="text-medium-emphasis">Aucun champ personnalise pour le moment.</p>
@@ -126,6 +124,7 @@
 <script setup>
 import { useProjectStore } from "@/stores/project";
 import { computed, reactive, ref, watch } from "vue";
+import draggable from "vuedraggable";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -166,6 +165,18 @@ const fields = computed(() => props.project.custom_fields || []);
 const taskFields = computed(() => fields.value.filter((f) => f.level !== "project"));
 const projectFields = computed(() => fields.value.filter((f) => f.level === "project"));
 
+// vuedraggable splices these local arrays directly for the drag gesture,
+// so they're plain copies rather than bound straight to the computeds above
+// (which would fight the drag) - resynced from the store whenever the
+// dialog opens or the field list changes for another reason (add/remove).
+const localTaskFields = ref([]);
+const localProjectFields = ref([]);
+
+function syncLocalFields() {
+  localTaskFields.value = [...taskFields.value].sort((a, b) => a.order - b.order);
+  localProjectFields.value = [...projectFields.value].sort((a, b) => a.order - b.order);
+}
+
 function typeLabel(value) {
   return fieldTypes.find((t) => t.value === value)?.title || value;
 }
@@ -184,9 +195,20 @@ watch(
       draft.optionsText = "";
       draft.show_in_list = false;
       error.value = "";
+      syncLocalFields();
     }
   }
 );
+
+async function onTaskFieldsReorder() {
+  const order = localTaskFields.value.map((f) => f.id);
+  await projectStore.reorderCustomFields(props.project.id, order);
+}
+
+async function onProjectFieldsReorder() {
+  const order = localProjectFields.value.map((f) => f.id);
+  await projectStore.reorderCustomFields(props.project.id, order);
+}
 
 function close() {
   emit("update:modelValue", false);
@@ -215,6 +237,7 @@ async function create() {
     draft.name = "";
     draft.optionsText = "";
     draft.show_in_list = false;
+    syncLocalFields();
   } catch (e) {
     error.value = e.response?.data?.name?.[0] || e.response?.data?.detail || "Impossible de creer ce champ.";
   }
@@ -243,6 +266,7 @@ async function toggleInList(field) {
 async function remove(field) {
   if (confirm(`Supprimer le champ "${field.name}" ? Les valeurs saisies seront perdues.`)) {
     await projectStore.deleteCustomField(field.id);
+    syncLocalFields();
   }
 }
 </script>

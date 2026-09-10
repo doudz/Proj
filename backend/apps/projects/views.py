@@ -81,6 +81,24 @@ class ProjectViewSet(viewsets.ModelViewSet):
         BoardColumn.objects.bulk_update(updated, ["order"])
         return Response(BoardColumnSerializer(project.columns.all(), many=True).data)
 
+    @action(detail=True, methods=["post"], url_path="reorder-custom-fields")
+    def reorder_custom_fields(self, request, pk=None):
+        """Reorder the custom fields of one level (task or project) at a time -
+        `order` only needs to list the ids of that level's fields; anything
+        else is left untouched, same as reorder-columns."""
+        project = self.get_object()
+        require_project_admin(request.user, project)
+        order = request.data.get("order", [])
+        fields = {f.id: f for f in project.custom_fields.all()}
+        updated = []
+        for index, field_id in enumerate(order):
+            field = fields.get(int(field_id))
+            if field:
+                field.order = index
+                updated.append(field)
+        CustomField.objects.bulk_update(updated, ["order"])
+        return Response(CustomFieldSerializer(project.custom_fields.all(), many=True).data)
+
     @action(detail=True, methods=["post"], url_path="set-baseline")
     @transaction.atomic
     def set_baseline(self, request, pk=None):
