@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "apps.tasks",
     "apps.chat",
     "apps.notifications",
+    "apps.mcpserver",
 ]
 
 MIDDLEWARE = [
