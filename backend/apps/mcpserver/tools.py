@@ -9,6 +9,7 @@ same action taken from the web UI - one set of business rules, not two.
 
 from asgiref.sync import sync_to_async
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.mcpserver.context import get_current_user
@@ -64,6 +65,16 @@ mcp = FastMCP(
     ),
     stateless_http=True,
     json_response=True,
+    # FastMCP auto-enables Host/Origin allowlisting ("DNS rebinding
+    # protection") whenever it thinks it's bound to 127.0.0.1 - its default,
+    # even though we never use that setting (only .streamable_http_app() is
+    # called, never .run()). That check runs before our own auth and would
+    # reject every request whose Host header isn't literally localhost,
+    # which breaks any real deployment reached through a reverse proxy under
+    # its own hostname. Every request is already authenticated by bearer
+    # token in apps.mcpserver.asgi regardless of Host, so this is redundant
+    # here - disable it explicitly rather than try to enumerate hostnames.
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 
