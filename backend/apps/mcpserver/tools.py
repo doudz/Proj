@@ -13,7 +13,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.mcpserver.context import get_current_user
-from apps.projects.views import BoardColumnViewSet, ProjectViewSet
+from apps.projects.views import BoardColumnViewSet, CustomFieldViewSet, ProjectViewSet
 from apps.tasks.views import CommentViewSet, TaskViewSet
 from apps.workspaces.views import WorkspaceViewSet
 
@@ -54,6 +54,20 @@ async def _call(method, viewset_cls, actions, **kwargs):
     return await sync_to_async(_run)(user, method, viewset_cls, actions, **kwargs)
 
 
+def _normalize_custom_values(values):
+    """Custom field values are always stored as text; a checkbox field in
+    particular expects the literal string "true"/"false" (that's what the
+    web UI sends and what displays a check). An AI client naturally reaches
+    for a JSON boolean instead - normalize it here so both work, rather than
+    silently storing Python's str(True) == "True" and breaking the checkbox."""
+    normalized = {}
+    for key, value in values.items():
+        if isinstance(value, bool):
+            value = "true" if value else "false"
+        normalized[str(key)] = value
+    return normalized
+
+
 mcp = FastMCP(
     name="GanttFlow",
     instructions=(
@@ -61,7 +75,9 @@ mcp = FastMCP(
         "list_workspaces puis list_projects pour recuperer les identifiants "
         "avant de creer ou modifier des projets/taches. list_columns donne "
         "les colonnes (statuts) d'un projet, necessaires pour create_task/"
-        "move_task."
+        "move_task. list_custom_fields donne les champs personnalises d'un "
+        "projet (niveau tache ou projet) ; set_task_custom_fields et "
+        "set_project_custom_fields renseignent leurs valeurs."
     ),
     stateless_http=True,
     json_response=True,
@@ -304,3 +320,99 @@ async def complete_task(task_id: int) -> dict:
 async def add_comment(task_id: int, body: str) -> dict:
     """Ajoute un commentaire sur une tache (reserve aux administrateurs et membres du projet, pas aux observateurs)."""
     return await _call("POST", CommentViewSet, {"post": "create"}, data={"task": task_id, "body": body})
+
+
+@mcp.tool()
+async def list_custom_fields(project_id: int, level: str | None = None) -> dict:
+    """Liste (cle "items") les champs personnalises definis sur un projet.
+
+    level: "task" (champ ajoute a chaque tache du projet) ou "project"
+    (champ affiche sur l'entete du projet) pour filtrer ; omis, les deux
+    niveaux sont renvoyes. Les valeurs actuelles se lisent via get_task /
+    get_project (cle custom_values, associant l'id du champ a sa valeur).
+    """
+    result = await _call("GET", CustomFieldViewSet, {"get": "list"}, query={"project": project_id})
+    if level:
+        result["items"] = [f for f in result["items"] if f["level"] == level]
+    return result
+
+
+@mcp.tool()
+async def create_custom_field(
+    project_id: int,
+    name: str,
+    field_type: str = "text",
+    level: str = "task",
+    options: list | None = None,
+    show_in_list: bool = False,
+) -> dict:
+    """Cree un champ personnalise sur un projet (reserve aux administrateurs du projet).
+
+    field_type: text, number, date, select, checkbox ou url - pour select,
+    fournissez `options` (liste des choix possibles). level: "task" (le
+    champ s'ajoute a chaque tache du projet ; desactivable tache par tache
+    ensuite) ou "project" (le champ vit sur l'entete du projet, une seule
+    valeur). show_in_list: pour un champ de niveau "task", lui donne sa
+    propre colonne dans la vue liste des taches.
+    """
+    data = {
+        "project": project_id,
+        "name": name,
+        "field_type": field_type,
+        "level": level,
+        "show_in_list": show_in_list,
+    }
+    if options is not None:
+        data["options"] = options
+    return await _call("POST", CustomFieldViewSet, {"post": "create"}, data=data)
+
+
+@mcp.tool()
+async def update_custom_field(
+    field_id: int,
+    name: str | None = None,
+    options: list | None = None,
+    show_in_list: bool | None = None,
+) -> dict:
+    """Renomme ou ajuste un champ personnalise existant (reserve aux administrateurs du projet).
+
+    Le type (field_type) et le niveau (level) ne sont pas modifiables une
+    fois le champ cree - creez un nouveau champ pour en changer.
+    """
+    data = {}
+    if name is not None:
+        data["name"] = name
+    if options is not None:
+        data["options"] = options
+    if show_in_list is not None:
+        data["show_in_list"] = show_in_list
+    if not data:
+        raise ValueError("Aucun champ a mettre a jour.")
+    return await _call("PATCH", CustomFieldViewSet, {"patch": "partial_update"}, data=data, pk=field_id)
+
+
+@mcp.tool()
+async def set_task_custom_fields(task_id: int, values: dict) -> dict:
+    """Renseigne ou modifie les valeurs des champs personnalises (niveau tache) d'une tache.
+
+    Accessible aussi aux personnes assignees a la tache, comme l'avancement
+    (pas seulement aux administrateurs du projet). `values` associe l'id du
+    champ personnalise (chaine ou nombre - voir list_custom_fields) a sa
+    valeur : une chaine pour text/select/url, "AAAA-MM-JJ" pour date, un
+    nombre pour number, "true"/"false" (ou un booleen, converti
+    automatiquement) pour checkbox.
+    """
+    data = {"custom_field_values": _normalize_custom_values(values)}
+    return await _call("PATCH", TaskViewSet, {"patch": "partial_update"}, data=data, pk=task_id)
+
+
+@mcp.tool()
+async def set_project_custom_fields(project_id: int, values: dict) -> dict:
+    """Renseigne ou modifie les valeurs des champs personnalises (niveau projet) d'un projet.
+
+    Reserve aux administrateurs du projet. `values` associe l'id du champ
+    personnalise (voir list_custom_fields avec level="project") a sa valeur
+    - memes conventions que set_task_custom_fields.
+    """
+    data = {"custom_field_values": _normalize_custom_values(values)}
+    return await _call("PATCH", ProjectViewSet, {"patch": "partial_update"}, data=data, pk=project_id)
