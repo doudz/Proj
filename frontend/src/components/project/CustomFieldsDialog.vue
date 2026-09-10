@@ -143,6 +143,7 @@ const fieldTypes = [
   { title: "Date", value: "date" },
   { title: "Liste de choix", value: "select" },
   { title: "Case a cocher", value: "checkbox" },
+  { title: "Interrupteur (Oui/Non)", value: "switch" },
   { title: "Lien", value: "url" },
 ];
 
@@ -157,6 +158,7 @@ const typeIcons = {
   date: "mdi-calendar-outline",
   select: "mdi-format-list-bulleted",
   checkbox: "mdi-checkbox-marked-outline",
+  switch: "mdi-toggle-switch-outline",
   url: "mdi-link-variant",
 };
 

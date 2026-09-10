@@ -100,7 +100,7 @@ def export_project(project):
 
 
 def _display_custom_value(field, raw):
-    if field.field_type == "checkbox":
+    if field.field_type in ("checkbox", "switch"):
         return "Oui" if raw == "true" else "Non"
     return raw
 
@@ -411,7 +411,7 @@ def _parse_int(value, row_num, label, warnings):
 
 
 def _to_field_value(field, raw):
-    if field.field_type == "checkbox":
+    if field.field_type in ("checkbox", "switch"):
         return "true" if _parse_bool(raw) else "false"
     if isinstance(raw, (date, datetime)):
         return raw.isoformat() if not isinstance(raw, datetime) else raw.date().isoformat()

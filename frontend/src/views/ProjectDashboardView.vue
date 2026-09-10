@@ -328,7 +328,7 @@ const filledProjectInfoChips = computed(() => {
 
 function displayCustomValue(field, raw) {
   if (!raw) return "";
-  if (field.field_type === "checkbox") return raw === "true" ? "Oui" : "";
+  if (field.field_type === "checkbox" || field.field_type === "switch") return raw === "true" ? "Oui" : "";
   return raw;
 }
 

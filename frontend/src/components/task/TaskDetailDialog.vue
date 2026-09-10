@@ -267,6 +267,17 @@
                       :readonly="!canEditState"
                       @update:model-value="(v) => saveCustom(field, v ? 'true' : 'false')"
                     />
+                    <v-switch
+                      v-else-if="field.field_type === 'switch'"
+                      :model-value="customDraft[field.id] === 'true'"
+                      :label="field.name"
+                      density="compact"
+                      hide-details
+                      color="primary"
+                      class="flex-grow-1"
+                      :readonly="!canEditState"
+                      @update:model-value="(v) => saveCustom(field, v ? 'true' : 'false')"
+                    />
                     <v-select
                       v-else-if="field.field_type === 'select'"
                       v-model="customDraft[field.id]"

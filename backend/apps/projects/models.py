@@ -114,6 +114,7 @@ class CustomField(models.Model):
         DATE = "date", "Date"
         SELECT = "select", "Liste de choix"
         CHECKBOX = "checkbox", "Case a cocher"
+        SWITCH = "switch", "Interrupteur (Oui/Non)"
         URL = "url", "Lien"
 
     class Level(models.TextChoices):

@@ -17,6 +17,16 @@
               :readonly="!canEdit"
               @update:model-value="(v) => save(field, v ? 'true' : 'false')"
             />
+            <v-switch
+              v-else-if="field.field_type === 'switch'"
+              :model-value="draft[field.id] === 'true'"
+              :label="field.name"
+              density="compact"
+              hide-details
+              color="primary"
+              :readonly="!canEdit"
+              @update:model-value="(v) => save(field, v ? 'true' : 'false')"
+            />
             <v-select
               v-else-if="field.field_type === 'select'"
               v-model="draft[field.id]"
@@ -73,14 +83,14 @@ function inputTypeFor(field) {
 }
 
 watch(
-  () => props.modelValue,
-  (open) => {
-    if (!open) return;
+  () => props.project.custom_values,
+  () => {
     for (const key of Object.keys(draft)) delete draft[key];
     for (const field of fields.value) {
       draft[field.id] = props.project.custom_values?.[String(field.id)] ?? "";
     }
-  }
+  },
+  { immediate: true }
 );
 
 function close() {

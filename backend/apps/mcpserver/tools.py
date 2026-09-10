@@ -55,11 +55,12 @@ async def _call(method, viewset_cls, actions, **kwargs):
 
 
 def _normalize_custom_values(values):
-    """Custom field values are always stored as text; a checkbox field in
-    particular expects the literal string "true"/"false" (that's what the
-    web UI sends and what displays a check). An AI client naturally reaches
-    for a JSON boolean instead - normalize it here so both work, rather than
-    silently storing Python's str(True) == "True" and breaking the checkbox."""
+    """Custom field values are always stored as text; a checkbox or switch
+    field in particular expects the literal string "true"/"false" (that's
+    what the web UI sends and what displays as checked/on). An AI client
+    naturally reaches for a JSON boolean instead - normalize it here so both
+    work, rather than silently storing Python's str(True) == "True" and
+    breaking the checkbox/switch."""
     normalized = {}
     for key, value in values.items():
         if isinstance(value, bool):
@@ -348,7 +349,8 @@ async def create_custom_field(
 ) -> dict:
     """Cree un champ personnalise sur un projet (reserve aux administrateurs du projet).
 
-    field_type: text, number, date, select, checkbox ou url - pour select,
+    field_type: text, number, date, select, checkbox, switch (identique a
+    checkbox, juste affiche comme un interrupteur) ou url - pour select,
     fournissez `options` (liste des choix possibles). level: "task" (le
     champ s'ajoute a chaque tache du projet ; desactivable tache par tache
     ensuite) ou "project" (le champ vit sur l'entete du projet, une seule
@@ -400,7 +402,7 @@ async def set_task_custom_fields(task_id: int, values: dict) -> dict:
     champ personnalise (chaine ou nombre - voir list_custom_fields) a sa
     valeur : une chaine pour text/select/url, "AAAA-MM-JJ" pour date, un
     nombre pour number, "true"/"false" (ou un booleen, converti
-    automatiquement) pour checkbox.
+    automatiquement) pour checkbox/switch.
     """
     data = {"custom_field_values": _normalize_custom_values(values)}
     return await _call("PATCH", TaskViewSet, {"patch": "partial_update"}, data=data, pk=task_id)

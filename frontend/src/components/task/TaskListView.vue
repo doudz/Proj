@@ -41,7 +41,7 @@
     </template>
     <template v-for="field in listCustomFields" :key="field.id" #[`item.cf_${field.id}`]="{ item }">
       <span v-if="item.excluded_custom_field_ids?.includes(field.id)" class="text-medium-emphasis">-</span>
-      <span v-else-if="field.field_type === 'checkbox'">
+      <span v-else-if="field.field_type === 'checkbox' || field.field_type === 'switch'">
         <v-icon
           :icon="item.custom_values?.[field.id] === 'true' ? 'mdi-check' : 'mdi-minus'"
           size="16"
